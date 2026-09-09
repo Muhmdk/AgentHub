@@ -22,6 +22,7 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.rag_top_k == 3
     assert settings.rag_minimum_score == 0.15
     assert settings.retrieval_timeout_seconds == 5.0
+    assert settings.database_url.endswith("@127.0.0.1:5432/agenthub")
 
 
 @pytest.mark.unit

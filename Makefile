@@ -3,7 +3,7 @@ VENV := .venv
 BIN := $(VENV)/bin
 UV_VERSION := 0.12.11
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security up migrate run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -43,6 +43,12 @@ security:
 	git ls-files -z | xargs -0 $(BIN)/detect-secrets-hook --baseline .secrets.baseline
 	$(BIN)/pip-audit
 
+up:
+	docker compose up --detach --wait postgres
+
+migrate:
+	$(BIN)/alembic upgrade head
+
 run:
 	$(BIN)/python -m apps.api
 
@@ -62,7 +68,7 @@ benchmark-rag:
 	$(BIN)/python -m agents.shared.benchmark
 
 down:
-	@echo "AgentHub runs in the foreground; press Ctrl-C in the server terminal to stop it."
+	docker compose down
 
 clean:
 	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache coverage.xml htmlcov
