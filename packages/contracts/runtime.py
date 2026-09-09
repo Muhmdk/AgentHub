@@ -61,6 +61,16 @@ class ToolCall(BaseModel):
     arguments: dict[str, JsonValue]
 
 
+class ToolDefinition(BaseModel):
+    """Tool metadata exposed to a runtime planner."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: NonEmptyString
+    description: NonEmptyString
+    read_only: Literal[True] = True
+
+
 class Citation(BaseModel):
     """Stable reference to synthetic evidence used by an answer."""
 
@@ -68,6 +78,15 @@ class Citation(BaseModel):
 
     source_id: NonEmptyString
     title: NonEmptyString
+
+
+class ToolObservation(BaseModel):
+    """Normalized tool output with stable supporting sources."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    data: dict[str, JsonValue]
+    citations: list[Citation]
 
 
 class ToolCallEvidence(BaseModel):
@@ -111,6 +130,24 @@ class AgentErrorCode(StrEnum):
     TOOL_TIMEOUT = "tool_timeout"
     EXECUTION_TIMEOUT = "execution_timeout"
     STEP_LIMIT = "step_limit"
+
+
+class ToolErrorCode(StrEnum):
+    """Stable read-only tool failure categories."""
+
+    INVALID_ARGUMENTS = "invalid_arguments"
+    NOT_FOUND = "not_found"
+    DATA_ERROR = "data_error"
+
+
+class ToolExecutionError(RuntimeError):
+    """Safe tool failure that never includes submitted values."""
+
+    def __init__(self, tool_name: str, code: ToolErrorCode, message: str) -> None:
+        super().__init__(message)
+        self.tool_name = tool_name
+        self.code = code
+        self.message = message
 
 
 class AgentExecutionError(RuntimeError):
