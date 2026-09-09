@@ -1,0 +1,7 @@
+[
+  {"store_id":"store-tor-queen","sku":"snow-shovel","start_date":"2026-09-01","end_date":"2026-09-07","daily_units":[4,5,6,5,6,7,5],"source_id":"sales:store-tor-queen:snow-shovel:2026-w36"},
+  {"store_id":"store-tor-york","sku":"snow-shovel","start_date":"2026-09-01","end_date":"2026-09-07","daily_units":[2,3,2,3,4,3,3],"source_id":"sales:store-tor-york:snow-shovel:2026-w36"},
+  {"store_id":"store-van-granville","sku":"snow-shovel","start_date":"2026-09-01","end_date":"2026-09-07","daily_units":[1,1,2,1,1,2,1],"source_id":"sales:store-van-granville:snow-shovel:2026-w36"},
+  {"store_id":"store-tor-queen","sku":"ice-melt","start_date":"2026-09-01","end_date":"2026-09-07","daily_units":[2,2,3,2,3,2,2],"source_id":"sales:store-tor-queen:ice-melt:2026-w36"},
+  {"store_id":"store-tor-york","sku":"ice-melt","start_date":"2026-09-01","end_date":"2026-09-07","daily_units":[2,1,2,2,1,2,2],"source_id":"sales:store-tor-york:ice-melt:2026-w36"}
+]

@@ -1,0 +1,7 @@
+[
+  {"store_id":"store-tor-queen","sku":"snow-shovel","on_hand":10,"reorder_point":15,"source_id":"inventory:store-tor-queen:snow-shovel:2026-09-08"},
+  {"store_id":"store-tor-york","sku":"snow-shovel","on_hand":42,"reorder_point":18,"source_id":"inventory:store-tor-york:snow-shovel:2026-09-08"},
+  {"store_id":"store-van-granville","sku":"snow-shovel","on_hand":30,"reorder_point":12,"source_id":"inventory:store-van-granville:snow-shovel:2026-09-08"},
+  {"store_id":"store-tor-queen","sku":"ice-melt","on_hand":55,"reorder_point":20,"source_id":"inventory:store-tor-queen:ice-melt:2026-09-08"},
+  {"store_id":"store-tor-york","sku":"ice-melt","on_hand":61,"reorder_point":20,"source_id":"inventory:store-tor-york:ice-melt:2026-09-08"}
+]
