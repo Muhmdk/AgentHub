@@ -95,3 +95,31 @@ def test_server_process_invokes_inventory_agent(running_api: str) -> None:
     assert response.status == 200
     assert "Queen Street may run low" in body["answer"]
     assert len(body["citations"]) == 6
+
+
+@pytest.mark.integration
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    ("agent", "query", "answer_fragment"),
+    [
+        ("knowledge", "Can I return an unopened product after 20 days?", "within 30 days"),
+        ("shopping", "Recommend a snow shovel under $50", "NorthPeak Aluminum Snow Shovel"),
+    ],
+)
+def test_server_process_invokes_grounded_agents(
+    running_api: str, agent: str, query: str, answer_fragment: str
+) -> None:
+    request = urllib.request.Request(
+        f"{running_api}/agents/{agent}/invoke",
+        data=json.dumps({"query": query, "seed": 6}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request, timeout=5) as response:
+        body = json.load(response)
+
+    assert response.status == 200
+    assert answer_fragment in body["answer"]
+    assert body["citations"]
+    assert body["retrieval"]["corpus_version"] == "v1"
