@@ -7,6 +7,7 @@ from packages.contracts.runtime import AgentRequest, AgentResponse, JsonValue, T
 from packages.evaluation.catalog import EvaluationCatalog
 from packages.evaluation.repository import EvaluationStore
 from packages.evaluation.runner import EvaluationRunner, EvaluationTarget
+from packages.observability import Telemetry, noop_telemetry
 from packages.registry.repository import RegistryStore
 
 
@@ -53,12 +54,14 @@ class EvaluationService:
         targets: dict[str, EvaluationTarget],
         catalog: EvaluationCatalog | None = None,
         runner: EvaluationRunner | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self._registry = registry
         self._store = store
         self._targets = targets
         self._catalog = catalog or EvaluationCatalog()
-        self._runner = runner or EvaluationRunner()
+        self._telemetry = telemetry or noop_telemetry()
+        self._runner = runner or EvaluationRunner(telemetry=self._telemetry)
 
     async def run(self, request: RunEvaluationRequest) -> EvaluationRunReport:
         version = await asyncio.to_thread(

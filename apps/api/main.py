@@ -41,6 +41,8 @@ from packages.contracts.retrieval import GroundedAgentResponse
 from packages.contracts.runtime import AgentRequest, AgentResponse
 from packages.evaluation.repository import EvaluationRepository, EvaluationStore
 from packages.evaluation.service import EvaluationService
+from packages.observability.conventions import Attribute
+from packages.observability.telemetry import Telemetry, TelemetryConfig
 from packages.registry.database import Database
 from packages.registry.repository import RegistryRepository, RegistryStore
 
@@ -55,10 +57,22 @@ def create_app(
     database: Database | None = None,
     registry_store: RegistryStore | None = None,
     evaluation_store: EvaluationStore | None = None,
+    telemetry_instance: Telemetry | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
     app_settings = settings or load_settings()
     configure_logging(app_settings)
+    telemetry = telemetry_instance or Telemetry(
+        TelemetryConfig(
+            service_name=app_settings.service_name,
+            service_version=app_settings.version,
+            environment=app_settings.environment,
+            enabled=app_settings.otel_enabled,
+            endpoint=app_settings.otel_endpoint,
+            export_interval_ms=app_settings.otel_export_interval_ms,
+            max_queue_size=app_settings.otel_max_queue_size,
+        )
+    )
     model = create_chat_model(app_settings.model_provider)
     inventory = inventory_agent or InventoryAgent(
         data=RetailData.load(),
@@ -66,6 +80,7 @@ def create_app(
         max_steps=app_settings.agent_max_steps,
         tool_timeout_seconds=app_settings.tool_timeout_seconds,
         execution_timeout_seconds=app_settings.agent_timeout_seconds,
+        telemetry=telemetry,
     )
     retriever, corpus, _ = create_retail_retriever()
     knowledge = knowledge_agent or KnowledgeAgent(
@@ -75,11 +90,13 @@ def create_app(
         top_k=app_settings.rag_top_k,
         minimum_score=app_settings.rag_minimum_score,
         timeout_seconds=app_settings.retrieval_timeout_seconds,
+        telemetry=telemetry,
     )
     shopping = shopping_agent or ShoppingAgent(
         product_tool=ProductSearchTool(retriever, corpus),
         model=model,
         timeout_seconds=app_settings.agent_timeout_seconds,
+        telemetry=telemetry,
     )
     registry_database = database
     owns_registry_database = False
@@ -105,6 +122,7 @@ def create_app(
             "knowledge-agent": knowledge,
             "shopping-agent": shopping,
         },
+        telemetry=telemetry,
     )
 
     @asynccontextmanager
@@ -113,6 +131,7 @@ def create_app(
         try:
             yield
         finally:
+            telemetry.shutdown()
             if owns_registry_database and registry_database is not None:
                 registry_database.dispose()
             logger.info("service_stopped")
@@ -123,6 +142,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.settings = app_settings
+    app.state.telemetry = telemetry
     app.state.inventory_agent = inventory
     app.state.knowledge_agent = knowledge
     app.state.shopping_agent = shopping
@@ -192,12 +212,20 @@ def create_app(
             Header(alias="X-AgentHub-Actor", min_length=2, max_length=200),
         ],
     ) -> RegistrationResult:
-        return await asyncio.to_thread(
-            registry.register,
-            manifest,
-            actor=actor,
-            correlation_id=request.state.correlation_id,
-        )
+        with telemetry.span(
+            "registry.register",
+            {
+                Attribute.AGENT_NAME: manifest.metadata.name,
+                Attribute.AGENT_VERSION: manifest.metadata.version,
+                Attribute.RELEASE_ID: request.state.release_id,
+            },
+        ):
+            return await asyncio.to_thread(
+                registry.register,
+                manifest,
+                actor=actor,
+                correlation_id=request.state.correlation_id,
+            )
 
     @app.get(
         "/registry/agents",
@@ -242,16 +270,24 @@ def create_app(
         change: LifecycleTransitionRequest,
         request: Request,
     ) -> AgentVersionView:
-        return await asyncio.to_thread(
-            registry.transition,
-            agent_name,
-            version,
-            target=change.target_state,
-            actor=change.actor,
-            reason=change.reason,
-            expected_revision=change.expected_revision,
-            correlation_id=request.state.correlation_id,
-        )
+        with telemetry.span(
+            "registry.transition",
+            {
+                Attribute.AGENT_NAME: agent_name,
+                Attribute.AGENT_VERSION: version,
+                Attribute.RELEASE_ID: request.state.release_id,
+            },
+        ):
+            return await asyncio.to_thread(
+                registry.transition,
+                agent_name,
+                version,
+                target=change.target_state,
+                actor=change.actor,
+                reason=change.reason,
+                expected_revision=change.expected_revision,
+                correlation_id=request.state.correlation_id,
+            )
 
     @app.get(
         "/registry/agents/{agent_name}/versions/{version}/audit",
@@ -270,8 +306,20 @@ def create_app(
         response_model=EvaluationRunReport,
         tags=["evaluations"],
     )
-    async def run_evaluation(request: RunEvaluationRequest) -> EvaluationRunReport:
-        return await evaluation_service.run(request)
+    async def run_evaluation(
+        evaluation_request: RunEvaluationRequest,
+        request: Request,
+    ) -> EvaluationRunReport:
+        with telemetry.span(
+            "evaluation.request",
+            {
+                Attribute.AGENT_NAME: evaluation_request.agent_name,
+                Attribute.AGENT_VERSION: evaluation_request.agent_version,
+                Attribute.EVALUATION_SUITE: evaluation_request.suite_id,
+                Attribute.RELEASE_ID: request.state.release_id,
+            },
+        ):
+            return await evaluation_service.run(evaluation_request)
 
     @app.get(
         "/evaluations/runs",

@@ -26,6 +26,8 @@ from packages.evaluation.artifacts import report_artifact_hash
 from packages.evaluation.catalog import EvaluationCatalog, artifact_hash
 from packages.evaluation.evaluators import ModelJudge, evaluate_case
 from packages.evaluation.gates import decide_gate
+from packages.observability import Telemetry, noop_telemetry
+from packages.observability.conventions import Attribute
 
 
 class EvaluationTarget(Protocol):
@@ -35,8 +37,13 @@ class EvaluationTarget(Protocol):
 class EvaluationRunner:
     """Evaluate an agent without allowing one failed case to hide other results."""
 
-    def __init__(self, model_judges: dict[str, ModelJudge] | None = None) -> None:
+    def __init__(
+        self,
+        model_judges: dict[str, ModelJudge] | None = None,
+        telemetry: Telemetry | None = None,
+    ) -> None:
         self._model_judges = model_judges or {}
+        self._telemetry = telemetry or noop_telemetry()
 
     async def run(
         self,
@@ -62,20 +69,26 @@ class EvaluationRunner:
         now = clock or (lambda: datetime.now(UTC))
         started_at = now()
         semaphore = asyncio.Semaphore(suite.max_concurrency)
-        tasks = [
-            asyncio.create_task(
-                self._run_case(target, case, suite, semaphore),
-                name=f"evaluation:{case.case_id}",
-            )
-            for case in dataset.cases
-        ]
-        try:
-            case_results = list(await asyncio.gather(*tasks))
-        except asyncio.CancelledError:
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            raise
+        attributes = {
+            Attribute.AGENT_NAME: dataset.agent_name,
+            Attribute.AGENT_VERSION: agent_version,
+            Attribute.EVALUATION_SUITE: suite.suite_id,
+        }
+        with self._telemetry.span("evaluation.run", attributes):
+            tasks = [
+                asyncio.create_task(
+                    self._run_case(target, case, suite, semaphore),
+                    name=f"evaluation:{case.case_id}",
+                )
+                for case in dataset.cases
+            ]
+            try:
+                case_results = list(await asyncio.gather(*tasks))
+            except asyncio.CancelledError:
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                raise
 
         aggregates = self._aggregate(case_results, suite)
         gate = decide_gate(
@@ -83,6 +96,11 @@ class EvaluationRunner:
             aggregates,
             baseline_metrics,
             baseline_run_id,
+        )
+        self._telemetry.record_evaluation(
+            attributes,
+            {metric.name: metric.value for metric in aggregates},
+            passed=gate.passed,
         )
         completed_at = now()
         status = (
