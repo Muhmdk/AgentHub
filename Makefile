@@ -44,7 +44,7 @@ security:
 	$(BIN)/pip-audit
 
 run:
-	$(BIN)/uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
+	$(BIN)/python -m apps.api
 
 down:
 	@echo "AgentHub runs in the foreground; press Ctrl-C in the server terminal to stop it."

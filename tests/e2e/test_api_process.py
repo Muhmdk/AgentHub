@@ -23,18 +23,12 @@ def running_api() -> Iterator[str]:
     port = _available_port()
     environment = os.environ.copy()
     environment["AGENTHUB_ENVIRONMENT"] = "test"
+    environment["AGENTHUB_API_PORT"] = str(port)
     process = subprocess.Popen(
         [
             ".venv/bin/python",
             "-m",
-            "uvicorn",
-            "apps.api.main:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--log-level",
-            "warning",
+            "apps.api",
         ],
         env=environment,
         stdout=subprocess.PIPE,
