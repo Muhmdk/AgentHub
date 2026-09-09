@@ -1,0 +1,11 @@
+{
+  "version": "retrieval-v1",
+  "cases": [
+    {"case_id":"returns","query":"Can I return an unopened item after 20 days?","filters":{"kind":"policy","trusted":true},"expected_document_id":"policy-returns-v1"},
+    {"case_id":"shipping","query":"How long does standard Canadian shipping take?","filters":{"kind":"policy","trusted":true},"expected_document_id":"policy-shipping-v1"},
+    {"case_id":"price-match","query":"Do you match an identical Canadian retailers price?","filters":{"kind":"policy","trusted":true},"expected_document_id":"policy-price-match-v1"},
+    {"case_id":"snow-shovel","query":"lightweight aluminum snow shovel for a small driveway","filters":{"kind":"product","trusted":true},"expected_document_id":"product-northpeak-shovel-v1"},
+    {"case_id":"ice-melt","query":"ice melt for a sidewalk at minus 20 degrees","filters":{"kind":"product","trusted":true},"expected_document_id":"product-ecogrip-melt-v1"},
+    {"case_id":"gloves","query":"insulated water resistant gloves for winter chores","filters":{"kind":"product","trusted":true},"expected_document_id":"product-thermal-gloves-v1"}
+  ]
+}

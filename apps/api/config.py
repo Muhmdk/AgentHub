@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     agent_max_steps: int = Field(default=3, ge=1, le=20)
     tool_timeout_seconds: float = Field(default=1.0, gt=0.0, le=30.0)
     agent_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
+    rag_top_k: int = Field(default=3, ge=1, le=20)
+    rag_minimum_score: float = Field(default=0.15, ge=0.0, le=1.0)
+    retrieval_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
     version: str = Field(default_factory=installed_version, min_length=1, max_length=64)
 
 

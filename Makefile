@@ -3,7 +3,7 @@ VENV := .venv
 BIN := $(VENV)/bin
 UV_VERSION := 0.12.11
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security run demo-inventory down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -22,7 +22,7 @@ lint:
 	$(BIN)/ruff check .
 
 typecheck:
-	$(BIN)/mypy apps packages tests
+	$(BIN)/mypy agents apps packages tests
 
 test:
 	$(BIN)/pytest
@@ -48,6 +48,18 @@ run:
 
 demo-inventory:
 	$(BIN)/python -m agents.inventory
+
+demo-knowledge:
+	$(BIN)/python -m agents.knowledge
+
+demo-shopping:
+	$(BIN)/python -m agents.shopping
+
+ingest-corpus:
+	$(BIN)/python -m agents.shared.ingest
+
+benchmark-rag:
+	$(BIN)/python -m agents.shared.benchmark
 
 down:
 	@echo "AgentHub runs in the foreground; press Ctrl-C in the server terminal to stop it."

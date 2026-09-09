@@ -104,3 +104,39 @@ class GroundedAgentResponse(AgentResponse):
     """Agent response augmented with reproducible retrieval metadata."""
 
     retrieval: RetrievalTrace
+
+
+class RetrievalBenchmarkCase(BaseModel):
+    """One known-answer query in a versioned retrieval benchmark."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    case_id: NonEmptyString
+    query: NonEmptyString
+    filters: dict[str, JsonValue] = Field(default_factory=dict)
+    expected_document_id: NonEmptyString
+
+
+class RetrievalBenchmarkResult(BaseModel):
+    """Outcome of one known-answer retrieval case."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    case_id: NonEmptyString
+    expected_document_id: NonEmptyString
+    result_document_ids: list[NonEmptyString]
+    hit: bool
+
+
+class RetrievalBenchmarkReport(BaseModel):
+    """Machine-readable aggregate retrieval benchmark."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    suite_version: NonEmptyString
+    corpus_id: NonEmptyString
+    corpus_version: NonEmptyString
+    case_count: int = Field(ge=0)
+    hit_count: int = Field(ge=0)
+    hit_rate: float = Field(ge=0.0, le=1.0)
+    results: list[RetrievalBenchmarkResult]
