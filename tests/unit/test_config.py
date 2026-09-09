@@ -19,6 +19,9 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.api_port == 8000
     assert settings.model_provider == "fake"
     assert settings.agent_max_steps == 3
+    assert settings.rag_top_k == 3
+    assert settings.rag_minimum_score == 0.15
+    assert settings.retrieval_timeout_seconds == 5.0
 
 
 @pytest.mark.unit

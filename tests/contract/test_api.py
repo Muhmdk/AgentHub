@@ -149,3 +149,61 @@ def test_inventory_invocation_rejects_unsupported_question(client: TestClient) -
         }
     }
     assert unknown not in response.text
+
+
+@pytest.mark.contract
+def test_knowledge_invocation_returns_grounded_policy_answer(client: TestClient) -> None:
+    response = client.post(
+        "/agents/knowledge/invoke",
+        json={"query": "Can I return an unopened product after 20 days?", "seed": 4},
+        headers={"X-Correlation-ID": "knowledge-contract"},
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert response.headers["X-Correlation-ID"] == "knowledge-contract"
+    assert body["answer"].startswith("Unopened products may be returned within 30 days")
+    assert body["citations"][0]["source_id"] in body["retrieval"]["result_ids"]
+    assert body["retrieval"]["corpus_version"] == "v1"
+
+
+@pytest.mark.contract
+def test_knowledge_invocation_abstains_without_evidence(client: TestClient) -> None:
+    response = client.post(
+        "/agents/knowledge/invoke",
+        json={"query": "What is the warranty for a lunar telescope?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Insufficient evidence in the current policy corpus."
+    assert response.json()["citations"] == []
+
+
+@pytest.mark.contract
+def test_shopping_invocation_recommends_only_retrieved_product(client: TestClient) -> None:
+    response = client.post(
+        "/agents/shopping/invoke",
+        json={"query": "Recommend a snow shovel under $50", "seed": 5},
+        headers={"X-Correlation-ID": "shopping-contract"},
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert response.headers["X-Correlation-ID"] == "shopping-contract"
+    assert body["answer"].startswith("I recommend NorthPeak Aluminum Snow Shovel at $39.99")
+    assert body["tool_calls"][0]["tool_name"] == "product.search"
+    assert body["citations"][0]["source_id"] in body["retrieval"]["result_ids"]
+
+
+@pytest.mark.contract
+def test_shopping_invocation_abstains_when_budget_excludes_results(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/agents/shopping/invoke",
+        json={"query": "Recommend a snow shovel under $10"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Insufficient product evidence for a recommendation."
+    assert response.json()["citations"] == []

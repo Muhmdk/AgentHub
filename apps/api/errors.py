@@ -87,6 +87,8 @@ async def agent_exception_handler(request: Request, exc: Exception) -> Response:
         AgentErrorCode.EXECUTION_TIMEOUT: 504,
         AgentErrorCode.STEP_LIMIT: 500,
         AgentErrorCode.MODEL_ERROR: 502,
+        AgentErrorCode.RETRIEVAL_ERROR: 502,
+        AgentErrorCode.RETRIEVAL_TIMEOUT: 504,
     }
     logger.warning("agent_request_failed", extra={"error_code": exc.code.value})
     return _response(
