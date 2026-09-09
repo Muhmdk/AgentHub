@@ -205,8 +205,7 @@ class Telemetry:
             self.remember_trace(agent_name, trace_id)
         self.agent_requests.add(1, labels)
         self.agent_duration.record(duration_ms, labels)
-        if not success:
-            self.agent_errors.add(1, labels)
+        self.agent_errors.add(int(not success), labels)
         self.observations.record("agent.request", 1, labels)
         self.observations.record("agent.success", float(success), labels)
         self.observations.record("agent.duration_ms", duration_ms, labels)
@@ -221,8 +220,7 @@ class Telemetry:
         labels = metric_attributes(attributes)
         self.tool_calls.add(1, labels)
         self.tool_duration.record(duration_ms, labels)
-        if success:
-            self.tool_success.add(1, labels)
+        self.tool_success.add(int(success), labels)
         self.observations.record("tool.success", float(success), labels)
         self.observations.record("tool.duration_ms", duration_ms, labels)
 

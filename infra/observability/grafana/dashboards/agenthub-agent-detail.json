@@ -1,0 +1,85 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [{"title": "Fleet health", "type": "link", "url": "/d/agenthub-fleet"}],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "1 - (sum(rate(agenthub_agent_errors_total{agent_name=\"$agent\"}[5m])) / clamp_min(sum(rate(agenthub_agent_requests_total{agent_name=\"$agent\"}[5m])), 0.000001))", "legendFormat": "availability", "refId": "A"}],
+      "title": "$agent availability",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(agenthub_agent_duration_milliseconds_bucket{agent_name=\"$agent\"}[5m])))", "legendFormat": "p95", "refId": "A"}],
+      "title": "$agent p95 latency",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(rate(agenthub_tool_success_total{agent_name=\"$agent\"}[5m])) / clamp_min(sum(rate(agenthub_tool_calls_total{agent_name=\"$agent\"}[5m])), 0.000001)", "legendFormat": "tool success", "refId": "A"}],
+      "title": "$agent tool success",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8},
+      "id": 4,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"expr": "sum by (gen_ai_token_type) (rate(agenthub_model_tokens_total{agent_name=\"$agent\"}[5m]))", "legendFormat": "{{gen_ai_token_type}} tokens", "refId": "A"},
+        {"expr": "sum(rate(agenthub_model_cost_USD_total{agent_name=\"$agent\"}[5m]))", "legendFormat": "cost USD/s", "refId": "B"}
+      ],
+      "title": "Token and cost rates",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8},
+      "id": 5,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"expr": "avg by (evaluation_metric) (agenthub_evaluation_score_ratio{agent_name=\"$agent\"})", "legendFormat": "{{evaluation_metric}}", "refId": "A"}],
+      "title": "Evaluation signals",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 41,
+  "tags": ["agenthub", "agent", "slo"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "definition": "label_values(agenthub_agent_requests_total, agent_name)",
+        "includeAll": false,
+        "label": "Agent",
+        "name": "agent",
+        "query": {"query": "label_values(agenthub_agent_requests_total, agent_name)", "refId": "PrometheusVariableQueryEditor-VariableQuery"},
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "AgentHub Agent Detail",
+  "uid": "agenthub-agent-detail",
+  "version": 1
+}

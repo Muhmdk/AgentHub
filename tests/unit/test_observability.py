@@ -1,8 +1,12 @@
 """Telemetry semantic conventions, privacy, propagation, and bounds."""
 
+from collections.abc import Sequence
+
 import pytest
 from fastapi.testclient import TestClient
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from apps.api.config import Settings
@@ -14,6 +18,15 @@ from packages.observability.privacy import (
     span_attributes,
 )
 from packages.observability.telemetry import ObservationStore, Telemetry, TelemetryConfig
+
+
+class FailingSpanExporter(SpanExporter):
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        del spans
+        return SpanExportResult.FAILURE
+
+    def shutdown(self) -> None:
+        return None
 
 
 @pytest.mark.unit
@@ -127,3 +140,27 @@ def test_declared_metric_surface_is_stable_and_bounded() -> None:
     assert len(METRIC_NAMES) == 14
     assert "agenthub.agent.duration" in METRIC_NAMES
     assert "agenthub.policy.denials" in METRIC_NAMES
+
+
+@pytest.mark.unit
+def test_exporter_failure_does_not_fail_or_expand_an_agent_request() -> None:
+    telemetry = Telemetry(
+        TelemetryConfig("agenthub-api", "test", "test", max_queue_size=64),
+        span_exporter=FailingSpanExporter(),
+        metric_reader=InMemoryMetricReader(),
+        observations=ObservationStore(capacity=4),
+    )
+    app = create_app(
+        Settings(environment="test", _env_file=None),
+        telemetry_instance=telemetry,
+    )
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        for _ in range(3):
+            response = client.post(
+                "/agents/knowledge/invoke",
+                json={"query": "Can I return an unopened product after 20 days?"},
+            )
+
+    assert response.status_code == 200
+    assert len(telemetry.observations.snapshot()) == 4

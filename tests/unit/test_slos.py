@@ -103,7 +103,8 @@ def test_fleet_health_uses_real_bounded_observations_and_trace_link() -> None:
         {"groundedness": 0.98, "correctness": 0.75},
         passed=True,
     )
-    telemetry.remember_trace("inventory-agent", "0af7651916cd43dd8448eb211c80319c")
+    trace_id = "0af7651916cd43dd8448eb211c80319c"  # pragma: allowlist secret
+    telemetry.remember_trace("inventory-agent", trace_id)
 
     health = fleet_health(telemetry, {"inventory-agent": "1.0.0"})
     agent = health.agents[0]
@@ -115,7 +116,7 @@ def test_fleet_health_uses_real_bounded_observations_and_trace_link() -> None:
     assert agent.groundedness == 0.98
     assert agent.evaluation_pass_rate == 1
     assert agent.mean_cost_usd == 0.001
-    assert agent.last_trace_id == "0af7651916cd43dd8448eb211c80319c"
+    assert agent.last_trace_id == "0af7651916cd43dd8448eb211c80319c"  # pragma: allowlist secret
     assert len(agent.slos) == 6
 
 

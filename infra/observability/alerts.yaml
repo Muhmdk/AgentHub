@@ -1,0 +1,47 @@
+groups:
+  - name: agenthub-slo-burn-rates
+    rules:
+      - alert: AgentHubAvailabilityFastBurn
+        expr: |
+          (
+            sum by (agent_name) (rate(agenthub_agent_errors_total[5m]))
+            / clamp_min(sum by (agent_name) (rate(agenthub_agent_requests_total[5m])), 0.000001)
+          ) / 0.01 > 14.4
+          and
+          (
+            sum by (agent_name) (rate(agenthub_agent_errors_total[1h]))
+            / clamp_min(sum by (agent_name) (rate(agenthub_agent_requests_total[1h])), 0.000001)
+          ) / 0.01 > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "{{ $labels.agent_name }} is exhausting its availability budget"
+          runbook_url: "/docs/runbooks/slo-burn-rate.md"
+      - alert: AgentHubAvailabilitySlowBurn
+        expr: |
+          (
+            sum by (agent_name) (rate(agenthub_agent_errors_total[30m]))
+            / clamp_min(sum by (agent_name) (rate(agenthub_agent_requests_total[30m])), 0.000001)
+          ) / 0.01 > 6
+          and
+          (
+            sum by (agent_name) (rate(agenthub_agent_errors_total[6h]))
+            / clamp_min(sum by (agent_name) (rate(agenthub_agent_requests_total[6h])), 0.000001)
+          ) / 0.01 > 6
+        for: 15m
+        labels:
+          severity: warning
+          slo: availability
+        annotations:
+          summary: "{{ $labels.agent_name }} has sustained availability budget burn"
+          runbook_url: "/docs/runbooks/slo-burn-rate.md"
+      - alert: AgentHubTelemetryCollectorMissing
+        expr: up{job="agenthub-otel-collector"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AgentHub telemetry collector metrics are unavailable"
+          runbook_url: "/docs/runbooks/telemetry-backend.md"
