@@ -5,7 +5,14 @@ from typing import ClassVar, Protocol
 
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
-from agents.inventory.data import RetailData, overlapping
+from agents.inventory.data import (
+    InventoryRecord,
+    Promotion,
+    RetailData,
+    SalesHistory,
+    WeatherForecast,
+    overlapping,
+)
 from packages.contracts.runtime import (
     Citation,
     JsonValue,
@@ -56,6 +63,36 @@ class _DatedCityInput(BaseModel):
         return self
 
 
+class InventoryView(InventoryRecord):
+    """Inventory record enriched with a human-readable store name."""
+
+    store_name: str
+
+
+class InventoryReadOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    records: list[InventoryView]
+
+
+class SalesReadOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    records: list[SalesHistory]
+
+
+class PromotionsReadOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    records: list[Promotion]
+
+
+class WeatherReadOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    records: list[WeatherForecast]
+
+
 class ReadOnlyRetailTool:
     """Common validation and error semantics for fixture-backed tools."""
 
@@ -98,13 +135,14 @@ class InventoryReadTool(ReadOnlyRetailTool):
         except LookupError:
             raise self._not_found() from None
         names = self._data.store_names()
+        output = InventoryReadOutput(
+            records=[
+                InventoryView(**record.model_dump(mode="python"), store_name=names[record.store_id])
+                for record in records
+            ]
+        )
         return ToolObservation(
-            data={
-                "records": [
-                    {**record.model_dump(mode="json"), "store_name": names[record.store_id]}
-                    for record in records
-                ]
-            },
+            data=output.model_dump(mode="json"),
             citations=[
                 Citation(source_id=record.source_id, title=f"Inventory at {names[record.store_id]}")
                 for record in records
@@ -131,8 +169,9 @@ class SalesReadTool(ReadOnlyRetailTool):
         except LookupError:
             raise self._not_found() from None
         names = self._data.store_names()
+        output = SalesReadOutput(records=records)
         return ToolObservation(
-            data={"records": [record.model_dump(mode="json") for record in records]},
+            data=output.model_dump(mode="json"),
             citations=[
                 Citation(
                     source_id=record.source_id, title=f"Sales history at {names[record.store_id]}"
@@ -160,8 +199,9 @@ class PromotionsReadTool(ReadOnlyRetailTool):
             )
         except LookupError:
             raise self._not_found() from None
+        output = PromotionsReadOutput(records=records)
         return ToolObservation(
-            data={"records": [record.model_dump(mode="json") for record in records]},
+            data=output.model_dump(mode="json"),
             citations=[
                 Citation(source_id=record.source_id, title=f"Promotion {record.promotion_id}")
                 for record in records
@@ -187,8 +227,9 @@ class WeatherReadTool(ReadOnlyRetailTool):
             )
         except LookupError:
             raise self._not_found() from None
+        output = WeatherReadOutput(records=records)
         return ToolObservation(
-            data={"records": [record.model_dump(mode="json") for record in records]},
+            data=output.model_dump(mode="json"),
             citations=[
                 Citation(source_id=record.source_id, title=f"Weather forecast for {record.city}")
                 for record in records

@@ -1,5 +1,6 @@
 """Provider-neutral contracts for model, tool, and agent execution."""
 
+from datetime import date
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -108,6 +109,7 @@ class AgentRequest(BaseModel):
 
     query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
     seed: int = 0
+    as_of: date = date(2026, 9, 8)
 
 
 class AgentResponse(BaseModel):
@@ -130,6 +132,7 @@ class AgentErrorCode(StrEnum):
     TOOL_TIMEOUT = "tool_timeout"
     EXECUTION_TIMEOUT = "execution_timeout"
     STEP_LIMIT = "step_limit"
+    MODEL_ERROR = "model_error"
 
 
 class ToolErrorCode(StrEnum):

@@ -193,6 +193,10 @@ class RetailData:
     def store_names(self) -> dict[str, str]:
         return {store.store_id: store.name for store in self.dataset.stores}
 
+    def product_name(self, sku: str) -> str:
+        self._require_sku(sku)
+        return next(product.name for product in self.dataset.products if product.sku == sku)
+
     def _require_city(self, city: str) -> None:
         if city.casefold() not in {store.city.casefold() for store in self.dataset.stores}:
             raise LookupError("Unknown city")
