@@ -102,5 +102,5 @@ def test_evaluation_artifacts_are_immutable_and_conflicts_are_rejected(
         )
 
     changed = report.model_copy(update={"artifact_hash": "b" * 64})
-    with pytest.raises(EvaluationConflictError, match="different artifact"):
+    with pytest.raises(EvaluationConflictError, match="artifact hash"):
         repository.save(changed)

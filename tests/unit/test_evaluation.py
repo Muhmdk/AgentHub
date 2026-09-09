@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 
 from packages.contracts.evaluation import (
+    EvaluationCase,
     EvaluationDataset,
     EvaluationRunReport,
     EvaluationSuite,
@@ -48,6 +49,26 @@ class RecordingTarget:
             return response(request.query)
         finally:
             self.active -= 1
+
+
+class ConstantJudge:
+    async def score(self, case: EvaluationCase, result: AgentResponse) -> float:
+        return 0.75
+
+
+class CancellableTarget:
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.cancelled = False
+
+    async def invoke(self, request: AgentRequest) -> AgentResponse:
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        raise AssertionError("unreachable")
 
 
 def catalog_inputs() -> tuple[EvaluationSuite, EvaluationDataset]:
@@ -197,3 +218,64 @@ def test_gate_fails_closed_for_missing_or_errored_metric() -> None:
 
     assert not decision.passed
     assert all(reason.code == "metric_unavailable" for reason in decision.reasons)
+
+
+@pytest.mark.unit
+def test_model_judges_are_opt_in_and_versioned() -> None:
+    suite, dataset = catalog_inputs()
+    semantic = suite.evaluators[-2].model_copy(update={"name": "semantic_quality", "kind": "model"})
+    suite = suite.model_copy(update={"evaluators": [*suite.evaluators[:-2], semantic]})
+    case = dataset.cases[0].model_copy(
+        update={
+            "request": AgentRequest(query=dataset.cases[0].expectations.exact_answer or "answer")
+        }
+    )
+    dataset = dataset.model_copy(update={"cases": [case]})
+    gate = EvaluationCatalog().gate_profile("default")
+
+    report = asyncio.run(
+        EvaluationRunner(model_judges={"semantic_quality": ConstantJudge()}).run(
+            target=RecordingTarget(),
+            agent_version_id=VERSION_ID,
+            agent_version="1.0.0",
+            manifest_hash="a" * 64,
+            suite=suite,
+            dataset=dataset,
+            gate_profile=gate,
+            environment="test",
+            provider_settings={},
+        )
+    )
+
+    assert report.metrics[-1].name == "semantic_quality"
+    assert report.metrics[-1].value == 0.75
+    assert report.metrics[-1].evaluator_version == "1.0.0"
+
+
+@pytest.mark.unit
+def test_cancelling_runner_cancels_in_flight_cases() -> None:
+    suite, dataset = catalog_inputs()
+    target = CancellableTarget()
+
+    async def scenario() -> None:
+        task = asyncio.create_task(
+            EvaluationRunner().run(
+                target=target,
+                agent_version_id=VERSION_ID,
+                agent_version="1.0.0",
+                manifest_hash="a" * 64,
+                suite=suite,
+                dataset=dataset,
+                gate_profile=EvaluationCatalog().gate_profile("default"),
+                environment="test",
+                provider_settings={},
+            )
+        )
+        await target.started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+
+    assert target.cancelled

@@ -2,11 +2,19 @@
 
 import re
 from collections.abc import Callable
+from typing import Protocol
 
 from packages.contracts.evaluation import CaseMetricResult, EvaluationCase, EvaluatorSpec
 from packages.contracts.runtime import AgentResponse
 
 Evaluator = Callable[[EvaluationCase, AgentResponse, float], float]
+
+
+class ModelJudge(Protocol):
+    """Explicitly configured semantic judge; never used for core safety gates."""
+
+    async def score(self, case: EvaluationCase, response: AgentResponse) -> float: ...
+
 
 _PII_PATTERNS = (
     re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
@@ -19,16 +27,36 @@ _HARMFUL_PATTERNS = (
 )
 
 
-def evaluate_case(
+async def evaluate_case(
     case: EvaluationCase,
     response: AgentResponse,
     latency_ms: float,
     specs: list[EvaluatorSpec],
+    model_judges: dict[str, ModelJudge] | None = None,
 ) -> list[CaseMetricResult]:
     """Apply the explicitly versioned evaluators to one successful response."""
     results: list[CaseMetricResult] = []
     for spec in specs:
         if spec.kind == "model":
+            judge = (model_judges or {}).get(spec.name)
+            if judge is not None:
+                try:
+                    results.append(
+                        CaseMetricResult(
+                            name=spec.name,
+                            evaluator_version=spec.version,
+                            value=await judge.score(case, response),
+                        )
+                    )
+                except Exception:
+                    results.append(
+                        CaseMetricResult(
+                            name=spec.name,
+                            evaluator_version=spec.version,
+                            error=f"{spec.name} model judge failed",
+                        )
+                    )
+                continue
             results.append(
                 CaseMetricResult(
                     name=spec.name,

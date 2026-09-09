@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from packages.contracts.evaluation import EvaluationRunReport, EvaluationRunSummary
+from packages.evaluation.artifacts import verify_report
 from packages.evaluation.models import (
     EvaluationCaseRecord,
     EvaluationGateRecord,
@@ -38,6 +39,10 @@ class EvaluationRepository:
         self._database = database
 
     def save(self, report: EvaluationRunReport) -> EvaluationRunReport:
+        try:
+            verify_report(report)
+        except ValueError as exc:
+            raise EvaluationConflictError(str(exc)) from exc
         try:
             with self._database.transaction() as session:
                 existing = session.get(EvaluationRunRecord, report.run_id)
@@ -154,7 +159,12 @@ class EvaluationRepository:
 
     @staticmethod
     def _report(record: EvaluationRunRecord) -> EvaluationRunReport:
-        return EvaluationRunReport.model_validate(record.report)
+        report = EvaluationRunReport.model_validate(record.report)
+        try:
+            verify_report(report)
+        except ValueError as exc:
+            raise EvaluationConflictError(str(exc)) from exc
+        return report
 
     @staticmethod
     def _summary(run: EvaluationRunRecord, version: AgentVersionRecord) -> EvaluationRunSummary:

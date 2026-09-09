@@ -34,6 +34,7 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--suite")
     command.add_argument("--candidate-profile", choices=("default", "regressed"), default="default")
     command.add_argument("--baseline-run-id", type=UUID)
+    command.add_argument("--replay-run-id", type=UUID)
     command.add_argument("--environment", default="local")
     command.add_argument("--format", choices=("json", "junit"), default="json")
     return command
@@ -112,11 +113,14 @@ async def run(arguments: argparse.Namespace) -> EvaluationRunReport:
     settings = load_settings()
     database = Database(settings.database_url)
     try:
+        store = EvaluationRepository(database)
+        if arguments.replay_run_id is not None:
+            return await asyncio.to_thread(store.get, arguments.replay_run_id)
         registry = RegistryRepository(database)
         ensure_registered(registry, arguments.agent, arguments.version)
         service = EvaluationService(
             registry=registry,
-            store=EvaluationRepository(database),
+            store=store,
             targets=create_targets(),
         )
         return await service.run(

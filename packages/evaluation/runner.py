@@ -22,8 +22,9 @@ from packages.contracts.evaluation import (
     MetricAggregate,
 )
 from packages.contracts.runtime import AgentExecutionError, AgentRequest, AgentResponse, JsonValue
+from packages.evaluation.artifacts import report_artifact_hash
 from packages.evaluation.catalog import EvaluationCatalog, artifact_hash
-from packages.evaluation.evaluators import evaluate_case
+from packages.evaluation.evaluators import ModelJudge, evaluate_case
 from packages.evaluation.gates import decide_gate
 
 
@@ -33,6 +34,9 @@ class EvaluationTarget(Protocol):
 
 class EvaluationRunner:
     """Evaluate an agent without allowing one failed case to hide other results."""
+
+    def __init__(self, model_judges: dict[str, ModelJudge] | None = None) -> None:
+        self._model_judges = model_judges or {}
 
     async def run(
         self,
@@ -124,9 +128,8 @@ class EvaluationRunner:
             "metrics": aggregates,
             "gate": gate,
         }
-        return EvaluationRunReport.model_validate(
-            {**report_values, "artifact_hash": artifact_hash(_json_value(report_values))}
-        )
+        report = EvaluationRunReport.model_validate({**report_values, "artifact_hash": "pending"})
+        return report.model_copy(update={"artifact_hash": report_artifact_hash(report)})
 
     async def _run_case(
         self,
@@ -171,7 +174,13 @@ class EvaluationRunner:
                 )
 
         latency_ms = (perf_counter() - started) * 1000
-        metrics = evaluate_case(case, response, latency_ms, suite.evaluators)
+        metrics = await evaluate_case(
+            case,
+            response,
+            latency_ms,
+            suite.evaluators,
+            self._model_judges,
+        )
         values: dict[str, object] = {
             "case_id": case.case_id,
             "status": CaseExecutionStatus.COMPLETED,

@@ -72,6 +72,13 @@ def test_cli_emits_passing_json_and_failing_junit(evaluation_database: Database)
     assert report["gate"]["passed"] is True
     assert len(report["case_results"]) == 3
     assert len(report["artifact_hash"]) == 64
+    replayed = command(
+        evaluation_database,
+        "--replay-run-id",
+        report["run_id"],
+    )
+    assert replayed.returncode == 0
+    assert json.loads(replayed.stdout) == report
 
     assert failed.returncode == 2
     junit = fromstring(failed.stdout)
