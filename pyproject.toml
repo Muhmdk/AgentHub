@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agenthub"
+version = "0.1.0"
+description = "Enterprise AgentOps and ModelOps control plane"
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+license = "MIT"
+authors = [{ name = "Muhammad Khan" }]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "pydantic-settings>=2.7,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[dependency-groups]
+dev = [
+  "detect-secrets>=1.5,<2",
+  "httpx>=0.28,<1",
+  "mypy>=1.14,<2",
+  "pip-audit>=2.8,<3",
+  "pytest>=8.3,<10",
+  "pytest-cov>=6,<8",
+  "ruff>=0.9,<1",
+]
+
+[tool.setuptools.packages.find]
+include = ["apps*", "packages*"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=apps --cov=packages --cov-report=term-missing --cov-report=xml --cov-fail-under=90"
+testpaths = ["tests"]
+markers = [
+  "unit: isolated domain or configuration test",
+  "contract: HTTP or schema contract test",
+  "integration: component integration test",
+  "e2e: process-level end-to-end smoke test",
+]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+]
