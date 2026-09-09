@@ -38,6 +38,14 @@ from packages.contracts.registry import (
     LifecycleTransitionRequest,
     RegistrationResult,
 )
+from packages.contracts.release import (
+    CandidateResult,
+    CreateCandidateRequest,
+    PromoteReleaseRequest,
+    ReleaseEventView,
+    ReleaseNotes,
+    ReleaseView,
+)
 from packages.contracts.retrieval import GroundedAgentResponse
 from packages.contracts.runtime import AgentRequest, AgentResponse
 from packages.evaluation.repository import EvaluationRepository, EvaluationStore
@@ -47,6 +55,8 @@ from packages.observability.slos import fleet_health
 from packages.observability.telemetry import Telemetry, TelemetryConfig
 from packages.registry.database import Database
 from packages.registry.repository import RegistryRepository, RegistryStore
+from packages.release.repository import ReleaseRepository, ReleaseStore
+from packages.release.service import ReleaseService
 
 logger = logging.getLogger("agenthub.api")
 
@@ -59,6 +69,7 @@ def create_app(
     database: Database | None = None,
     registry_store: RegistryStore | None = None,
     evaluation_store: EvaluationStore | None = None,
+    release_store: ReleaseStore | None = None,
     telemetry_instance: Telemetry | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
@@ -126,6 +137,14 @@ def create_app(
         },
         telemetry=telemetry,
     )
+    releases: ReleaseStore
+    if release_store is not None:
+        releases = release_store
+    elif registry_database is not None:
+        releases = ReleaseRepository(registry_database)
+    else:  # pragma: no cover - custom stores must be supplied together
+        raise ValueError("A release store is required without a database")
+    release_service = ReleaseService(registry, evaluations, releases)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -150,6 +169,7 @@ def create_app(
     app.state.shopping_agent = shopping
     app.state.registry = registry
     app.state.evaluations = evaluations
+    app.state.releases = releases
     app.state.database = registry_database
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
@@ -351,6 +371,68 @@ def create_app(
     @app.get("/evaluations", response_class=FileResponse, include_in_schema=False)
     async def evaluation_console() -> FileResponse:
         return FileResponse(evaluation_page_path())
+
+    @app.post(
+        "/releases/candidates",
+        response_model=CandidateResult,
+        tags=["releases"],
+    )
+    async def create_release_candidate(
+        candidate: CreateCandidateRequest,
+        request: Request,
+    ) -> CandidateResult:
+        with telemetry.span(
+            "release.candidate",
+            {
+                Attribute.AGENT_NAME: candidate.agent_name,
+                Attribute.AGENT_VERSION: candidate.agent_version,
+                Attribute.RELEASE_ID: request.state.release_id,
+            },
+        ):
+            return await asyncio.to_thread(release_service.create_candidate, candidate)
+
+    @app.get("/releases", response_model=list[ReleaseView], tags=["releases"])
+    async def list_releases(agent_name: str | None = None) -> list[ReleaseView]:
+        return await asyncio.to_thread(releases.list_releases, agent_name)
+
+    @app.get("/releases/{release_id}", response_model=ReleaseView, tags=["releases"])
+    async def get_release(release_id: UUID) -> ReleaseView:
+        return await asyncio.to_thread(releases.get, release_id)
+
+    @app.post(
+        "/releases/{release_id}/transitions",
+        response_model=ReleaseView,
+        tags=["releases"],
+    )
+    async def promote_release(
+        release_id: UUID,
+        change: PromoteReleaseRequest,
+        request: Request,
+    ) -> ReleaseView:
+        with telemetry.span(
+            "release.promote",
+            {
+                Attribute.RELEASE_ID: str(release_id),
+                Attribute.CORRELATION_ID: request.state.correlation_id,
+            },
+        ):
+            return await asyncio.to_thread(release_service.promote, release_id, change)
+
+    @app.get(
+        "/releases/{release_id}/events",
+        response_model=list[ReleaseEventView],
+        tags=["releases"],
+    )
+    async def list_release_events(release_id: UUID) -> list[ReleaseEventView]:
+        return await asyncio.to_thread(releases.events, release_id)
+
+    @app.get(
+        "/releases/{release_id}/notes",
+        response_model=ReleaseNotes,
+        tags=["releases"],
+    )
+    async def release_notes(release_id: UUID) -> ReleaseNotes:
+        return await asyncio.to_thread(release_service.notes, release_id)
 
     async def current_fleet_health() -> FleetHealth:
         summaries = await asyncio.to_thread(registry.list_agents)

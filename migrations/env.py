@@ -6,9 +6,12 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-import packages.evaluation.models
-import packages.registry.models  # noqa: F401
+from packages.evaluation import models as evaluation_models
+from packages.registry import models as registry_models
 from packages.registry.database import RegistryBase
+from packages.release import models as release_models
+
+_MAPPED_MODELS = (evaluation_models, registry_models, release_models)
 
 config = context.config
 if config.config_file_name is not None:
