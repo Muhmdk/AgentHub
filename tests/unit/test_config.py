@@ -17,6 +17,8 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.environment == "local"
     assert settings.api_host == "127.0.0.1"
     assert settings.api_port == 8000
+    assert settings.model_provider == "fake"
+    assert settings.agent_max_steps == 3
 
 
 @pytest.mark.unit

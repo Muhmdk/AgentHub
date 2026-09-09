@@ -12,6 +12,7 @@ license = "MIT"
 authors = [{ name = "Muhammad Khan" }]
 dependencies = [
   "fastapi>=0.115,<1",
+  "langgraph>=1.0,<2",
   "pydantic-settings>=2.7,<3",
   "uvicorn>=0.34,<1",
 ]
@@ -28,7 +29,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["apps*", "packages*"]
+include = ["agents*", "apps*", "packages*"]
 
 [tool.ruff]
 target-version = "py314"
@@ -43,7 +44,7 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers --cov=apps --cov=packages --cov-report=term-missing --cov-report=xml --cov-fail-under=90"
+addopts = "--strict-config --strict-markers --cov=agents --cov=apps --cov=packages --cov-report=term-missing --cov-report=xml --cov-fail-under=90"
 testpaths = ["tests"]
 filterwarnings = [
   "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning:starlette.testclient",

@@ -1,0 +1,4 @@
+[
+  {"city":"Toronto","start_date":"2026-09-12","end_date":"2026-09-13","condition":"snow","snowfall_cm":17.0,"demand_lift":1.5,"source_id":"weather:toronto:2026-09-12:2026-09-13"},
+  {"city":"Vancouver","start_date":"2026-09-12","end_date":"2026-09-13","condition":"rain","snowfall_cm":0.0,"demand_lift":1.0,"source_id":"weather:vancouver:2026-09-12:2026-09-13"}
+]

@@ -1,0 +1,5 @@
+[
+  {"store_id":"store-tor-queen","name":"Queen Street","city":"Toronto","province":"ON"},
+  {"store_id":"store-tor-york","name":"York Mills","city":"Toronto","province":"ON"},
+  {"store_id":"store-van-granville","name":"Granville Street","city":"Vancouver","province":"BC"}
+]

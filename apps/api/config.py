@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     api_host: str = Field(default="127.0.0.1", min_length=1)
     api_port: int = Field(default=8000, ge=1, le=65535)
+    model_provider: Literal["fake"] = "fake"
+    agent_max_steps: int = Field(default=3, ge=1, le=20)
+    tool_timeout_seconds: float = Field(default=1.0, gt=0.0, le=30.0)
+    agent_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
     version: str = Field(default_factory=installed_version, min_length=1, max_length=64)
 
 

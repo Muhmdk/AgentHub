@@ -3,7 +3,7 @@ VENV := .venv
 BIN := $(VENV)/bin
 UV_VERSION := 0.12.11
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security run down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security run demo-inventory down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -45,6 +45,9 @@ security:
 
 run:
 	$(BIN)/python -m apps.api
+
+demo-inventory:
+	$(BIN)/python -m agents.inventory
 
 down:
 	@echo "AgentHub runs in the foreground; press Ctrl-C in the server terminal to stop it."

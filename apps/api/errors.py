@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
 from packages.contracts.errors import ErrorEnvelope, ErrorPayload, ValidationIssue
+from packages.contracts.runtime import AgentErrorCode, AgentExecutionError
 
 logger = logging.getLogger("agenthub.api.errors")
 
@@ -75,9 +76,33 @@ async def unexpected_exception_handler(request: Request, exc: Exception) -> Resp
     )
 
 
+async def agent_exception_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, AgentExecutionError):  # pragma: no cover - framework contract
+        raise TypeError("Expected AgentExecutionError")
+
+    status_by_code = {
+        AgentErrorCode.INVALID_REQUEST: 422,
+        AgentErrorCode.TOOL_ERROR: 502,
+        AgentErrorCode.TOOL_TIMEOUT: 504,
+        AgentErrorCode.EXECUTION_TIMEOUT: 504,
+        AgentErrorCode.STEP_LIMIT: 500,
+        AgentErrorCode.MODEL_ERROR: 502,
+    }
+    logger.warning("agent_request_failed", extra={"error_code": exc.code.value})
+    return _response(
+        status_by_code[exc.code],
+        ErrorPayload(
+            code=exc.code.value,
+            message=exc.message,
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register all public API exception contracts."""
     handlers: tuple[tuple[type[Exception], ExceptionHandler], ...] = (
+        (AgentExecutionError, agent_exception_handler),
         (StarletteHTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),
