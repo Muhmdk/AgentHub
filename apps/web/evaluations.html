@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AgentHub Evaluations</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+      body { margin: 0; background: #09101d; color: #f0f6ff; }
+      main { width: min(1180px, calc(100% - 40px)); margin: 48px auto; }
+      header { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+      h1 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); letter-spacing: -.05em; }
+      h2 { margin: 0 0 14px; font-size: 1.1rem; }
+      p, label, th { color: #9eacc8; }
+      a { color: #7dd3fc; }
+      .controls, .panel { background: #121c2e; border: 1px solid #293750; border-radius: 14px; padding: 20px; }
+      .controls { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; margin: 28px 0 18px; align-items: end; }
+      label { display: grid; gap: 7px; font-size: .86rem; }
+      select, button { border: 1px solid #3a4b69; border-radius: 8px; background: #0c1525; color: #f0f6ff; padding: 10px 12px; font: inherit; }
+      button { cursor: pointer; background: #176b87; border-color: #2994b7; font-weight: 700; }
+      button:focus-visible, select:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
+      .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+      .summary article { background: #0c1525; border-radius: 10px; padding: 14px; }
+      .summary span { display: block; color: #9eacc8; font-size: .78rem; text-transform: uppercase; }
+      .summary strong { display: block; margin-top: 5px; overflow-wrap: anywhere; }
+      .pass { color: #6ee7b7; } .fail { color: #fda4af; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #293750; }
+      td:nth-child(n+2), th:nth-child(n+2) { text-align: right; }
+      #reasons { padding-left: 20px; }
+      #reasons li { margin: 9px 0; }
+      .empty { min-height: 80px; display: grid; place-items: center; }
+      @media (max-width: 680px) { header { display: block; } .controls { grid-template-columns: 1fr; } table { font-size: .82rem; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div><p>RELEASE CONTROL</p><h1>Evaluation runs</h1></div>
+        <p><a href="/registry">Registry</a> · absolute and production-relative gates</p>
+      </header>
+      <div class="controls">
+        <label>Candidate run<select id="candidate" aria-label="Candidate run"></select></label>
+        <label>Baseline run<select id="baseline" aria-label="Baseline run"></select></label>
+        <button id="compare" type="button">Compare runs</button>
+      </div>
+      <p id="status" role="status">Loading evaluation artifacts…</p>
+      <section id="report" class="panel empty" aria-live="polite">No run selected.</section>
+    </main>
+    <script>
+      const candidate = document.querySelector("#candidate");
+      const baseline = document.querySelector("#baseline");
+      const status = document.querySelector("#status");
+      const report = document.querySelector("#report");
+
+      function element(name, text, className) {
+        const node = document.createElement(name);
+        node.textContent = text;
+        if (className) node.className = className;
+        return node;
+      }
+
+      function option(run) {
+        const node = document.createElement("option");
+        node.value = run.run_id;
+        node.textContent = `${run.agent_name} ${run.agent_version} · ${run.gate_passed ? "PASS" : "FAIL"} · ${run.run_id.slice(0, 8)}`;
+        return node;
+      }
+
+      async function getRun(id) {
+        const response = await fetch(`/evaluations/runs/${encodeURIComponent(id)}`);
+        if (!response.ok) throw new Error("Evaluation artifact is unavailable");
+        return response.json();
+      }
+
+      function valueMap(run) {
+        return new Map(run.metrics.map(metric => [metric.name, metric.value]));
+      }
+
+      function render(candidateRun, baselineRun) {
+        report.classList.remove("empty");
+        const summary = element("div", "", "summary");
+        [["Gate", candidateRun.gate.passed ? "PASS" : "FAIL"], ["Run", candidateRun.run_id], ["Suite", `${candidateRun.suite_id}@${candidateRun.suite_version}`], ["Artifact", candidateRun.artifact_hash.slice(0, 16)]]
+          .forEach(([label, value], index) => {
+            const card = document.createElement("article");
+            card.append(element("span", label), element("strong", value, index === 0 ? (candidateRun.gate.passed ? "pass" : "fail") : ""));
+            summary.append(card);
+          });
+        const heading = element("h2", "Metric comparison");
+        const table = document.createElement("table");
+        const head = document.createElement("tr");
+        ["Metric", "Candidate", "Baseline", "Delta"].forEach(label => head.append(element("th", label)));
+        const thead = document.createElement("thead"); thead.append(head); table.append(thead);
+        const tbody = document.createElement("tbody");
+        const baselineValues = baselineRun ? valueMap(baselineRun) : new Map();
+        candidateRun.metrics.forEach(metric => {
+          const baselineValue = baselineValues.get(metric.name);
+          const row = document.createElement("tr");
+          const values = [metric.name, metric.value.toFixed(4), baselineValue === undefined ? "—" : baselineValue.toFixed(4), baselineValue === undefined ? "—" : (metric.value - baselineValue).toFixed(4)];
+          values.forEach(value => row.append(element("td", value))); tbody.append(row);
+        });
+        table.append(tbody);
+        const reasonsHeading = element("h2", "Gate checks"); reasonsHeading.style.marginTop = "26px";
+        const reasons = document.createElement("ul"); reasons.id = "reasons";
+        candidateRun.gate.reasons.forEach(reason => reasons.append(element("li", reason.message, reason.passed ? "pass" : "fail")));
+        report.replaceChildren(summary, heading, table, reasonsHeading, reasons);
+      }
+
+      async function compareRuns() {
+        if (!candidate.value) return;
+        status.textContent = "Loading comparison…";
+        try {
+          const candidateRun = await getRun(candidate.value);
+          const baselineRun = baseline.value ? await getRun(baseline.value) : null;
+          render(candidateRun, baselineRun);
+          status.textContent = `Showing ${candidateRun.case_results.length} cases and ${candidateRun.metrics.length} aggregate metrics.`;
+        } catch (error) { status.textContent = error.message; }
+      }
+
+      async function loadRuns() {
+        try {
+          const response = await fetch("/evaluations/runs");
+          if (!response.ok) throw new Error("Evaluation API is unavailable");
+          const runs = await response.json();
+          baseline.append(new Option("No baseline (absolute gates)", ""));
+          runs.forEach(run => { candidate.append(option(run)); baseline.append(option(run)); });
+          status.textContent = runs.length ? `${runs.length} immutable evaluation runs` : "No evaluation runs yet. Use make evaluate to create one.";
+          if (runs.length) await compareRuns();
+        } catch (error) { status.textContent = error.message; }
+      }
+      document.querySelector("#compare").addEventListener("click", compareRuns);
+      loadRuns();
+    </script>
+  </body>
+</html>

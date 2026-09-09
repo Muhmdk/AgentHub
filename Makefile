@@ -3,7 +3,7 @@ VENV := .venv
 BIN := $(VENV)/bin
 UV_VERSION := 0.12.11
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security up migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security up migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -69,6 +69,12 @@ ingest-corpus:
 
 benchmark-rag:
 	$(BIN)/python -m agents.shared.benchmark
+
+evaluate:
+	$(BIN)/python -m packages.evaluation
+
+evaluate-bad:
+	$(BIN)/python -m packages.evaluation --candidate-profile regressed
 
 down:
 	docker compose down

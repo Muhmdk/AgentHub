@@ -6,3 +6,7 @@ from pathlib import Path
 
 def registry_page_path() -> Path:
     return Path(str(files("apps.web").joinpath("registry.html")))
+
+
+def evaluation_page_path() -> Path:
+    return Path(str(files("apps.web").joinpath("evaluations.html")))

@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -20,7 +21,13 @@ from apps.api.config import Settings, load_settings
 from apps.api.errors import register_error_handlers
 from apps.api.logging import configure_logging
 from apps.api.middleware import correlation_middleware
-from apps.web import registry_page_path
+from apps.web import evaluation_page_path, registry_page_path
+from packages.contracts.evaluation import (
+    EvaluationRunReport,
+    EvaluationRunSummary,
+    GateDecision,
+    RunEvaluationRequest,
+)
 from packages.contracts.health import HealthResponse, VersionResponse
 from packages.contracts.manifest import AgentManifest
 from packages.contracts.registry import (
@@ -32,6 +39,8 @@ from packages.contracts.registry import (
 )
 from packages.contracts.retrieval import GroundedAgentResponse
 from packages.contracts.runtime import AgentRequest, AgentResponse
+from packages.evaluation.repository import EvaluationRepository, EvaluationStore
+from packages.evaluation.service import EvaluationService
 from packages.registry.database import Database
 from packages.registry.repository import RegistryRepository, RegistryStore
 
@@ -45,6 +54,7 @@ def create_app(
     shopping_agent: ShoppingAgent | None = None,
     database: Database | None = None,
     registry_store: RegistryStore | None = None,
+    evaluation_store: EvaluationStore | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
     app_settings = settings or load_settings()
@@ -80,6 +90,22 @@ def create_app(
         registry: RegistryStore = RegistryRepository(registry_database)
     else:
         registry = registry_store
+    evaluations: EvaluationStore
+    if evaluation_store is not None:
+        evaluations = evaluation_store
+    elif registry_database is not None:
+        evaluations = EvaluationRepository(registry_database)
+    else:  # pragma: no cover - a custom registry should provide an evaluation store
+        raise ValueError("An evaluation store is required without a database")
+    evaluation_service = EvaluationService(
+        registry=registry,
+        store=evaluations,
+        targets={
+            "inventory-agent": inventory,
+            "knowledge-agent": knowledge,
+            "shopping-agent": shopping,
+        },
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -101,6 +127,7 @@ def create_app(
     app.state.knowledge_agent = knowledge
     app.state.shopping_agent = shopping
     app.state.registry = registry
+    app.state.evaluations = evaluations
     app.state.database = registry_database
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
@@ -237,6 +264,43 @@ def create_app(
     @app.get("/registry", response_class=FileResponse, include_in_schema=False)
     async def registry_console() -> FileResponse:
         return FileResponse(registry_page_path())
+
+    @app.post(
+        "/evaluations/runs",
+        response_model=EvaluationRunReport,
+        tags=["evaluations"],
+    )
+    async def run_evaluation(request: RunEvaluationRequest) -> EvaluationRunReport:
+        return await evaluation_service.run(request)
+
+    @app.get(
+        "/evaluations/runs",
+        response_model=list[EvaluationRunSummary],
+        tags=["evaluations"],
+    )
+    async def list_evaluations(agent_name: str | None = None) -> list[EvaluationRunSummary]:
+        return await asyncio.to_thread(evaluations.list, agent_name)
+
+    @app.get(
+        "/evaluations/runs/{run_id}/comparison",
+        response_model=GateDecision,
+        tags=["evaluations"],
+    )
+    async def evaluation_comparison(run_id: UUID) -> GateDecision:
+        report = await asyncio.to_thread(evaluations.get, run_id)
+        return report.gate
+
+    @app.get(
+        "/evaluations/runs/{run_id}",
+        response_model=EvaluationRunReport,
+        tags=["evaluations"],
+    )
+    async def get_evaluation(run_id: UUID) -> EvaluationRunReport:
+        return await asyncio.to_thread(evaluations.get, run_id)
+
+    @app.get("/evaluations", response_class=FileResponse, include_in_schema=False)
+    async def evaluation_console() -> FileResponse:
+        return FileResponse(evaluation_page_path())
 
     return app
 

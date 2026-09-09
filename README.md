@@ -7,8 +7,8 @@ is being delivered in twelve independently reviewable phases described in
 
 ## Current status
 
-Phases 00 through 03 provide the local development foundation, three bounded demonstration
-agents, and the first persistent control-plane domain.
+Phases 00 through 04 provide the local development foundation, three bounded demonstration
+agents, an immutable registry, and reproducible release evaluations.
 The repository currently includes:
 
 - FastAPI liveness, readiness, and version endpoints;
@@ -23,13 +23,18 @@ The repository currently includes:
 - a PostgreSQL registry for immutable agent versions and lifecycle state;
 - idempotent manifest registration, optimistic concurrency, and append-only audits;
 - registry APIs and a small operator inventory view backed by persisted data;
+- versioned evaluation datasets, suites, evaluator versions, and release-gate profiles;
+- bounded case execution with timeouts, safe failures, integrity hashes, and replay;
+- deterministic quality, grounding, tool, safety, latency, token, and cost evaluators;
+- immutable PostgreSQL evaluation artifacts with absolute and relative gate reasons;
+- evaluation APIs, JSON/JUnit CLI output, and an operator comparison view;
 - synthetic store, SKU, inventory, sales, promotion, and weather evidence;
 - unit, contract, and process-level smoke tests;
 - linting, formatting, strict typing, coverage, secret scanning, and dependency auditing;
 - a least-privilege GitHub Actions CI workflow.
 
-Broader evaluation, governance, deployment automation, and incident operations are planned for
-later phases and are not represented as implemented here.
+Governance, deployment automation, and incident operations are planned for later phases and are
+not represented as implemented here.
 
 ## Prerequisites
 
@@ -100,12 +105,32 @@ Expected responses:
 ```json
 {"status":"ok","service":"agenthub-api"}
 {"status":"ready","service":"agenthub-api"}
-{"service":"agenthub-api","version":"0.1.0","environment":"local"}
+{"service":"agenthub-api","version":"0.2.0","environment":"local"}
 ```
 
 Stop the foreground server with `Ctrl-C`. Interactive API documentation is available at
 `http://127.0.0.1:8000/docs` while the service is running. The registry console is available at
-`http://127.0.0.1:8000/registry`. Run `make down` when the local database is no longer needed.
+`http://127.0.0.1:8000/registry`; evaluation comparison is at
+`http://127.0.0.1:8000/evaluations`. Run `make down` when the local database is no longer needed.
+
+## Evaluation and release gates
+
+Run the default Inventory Agent suite and print its immutable JSON report:
+
+```bash
+make evaluate
+```
+
+The command exits `0` when execution completes and every gate passes. A deterministic known-bad
+candidate demonstrates release blocking and exits `2`:
+
+```bash
+make evaluate-bad
+```
+
+Use `python -m packages.evaluation --help` to select another agent, emit JUnit, compare against a
+stored baseline, or replay an existing run by UUID. The [evaluation guide](docs/evaluations.md)
+documents metrics, thresholds, artifacts, APIs, replay, and model-judge limits.
 
 ## API contracts
 
@@ -124,6 +149,10 @@ Stop the foreground server with `Ctrl-C`. Interactive API documentation is avail
 | `GET /registry/agents/{name}/versions/{version}` | Gets a complete manifest version | `200` |
 | `POST /registry/agents/{name}/versions/{version}/transitions` | Applies a legal lifecycle change | `200` |
 | `GET /registry/agents/{name}/versions/{version}/audit` | Lists append-only registry events | `200` |
+| `POST /evaluations/runs` | Evaluates one registered candidate with a versioned suite | `200` |
+| `GET /evaluations/runs` | Lists evaluation summaries, optionally filtered by agent | `200` |
+| `GET /evaluations/runs/{run_id}` | Replays one immutable full report | `200` |
+| `GET /evaluations/runs/{run_id}/comparison` | Gets absolute and relative gate checks | `200` |
 
 Clients may provide `X-Correlation-ID` using letters, numbers, `.`, `_`, `:`, or `-`, up
 to 128 characters. AgentHub returns the accepted ID in the response. Missing or unsafe
@@ -199,6 +228,8 @@ submitted value is deliberately omitted so a mistaken secret cannot be echoed.
 | `make demo-shopping` | Run the grounded Shopping Agent CLI |
 | `make ingest-corpus` | Validate ingestion and verify unchanged chunks are not duplicated |
 | `make benchmark-rag` | Print the versioned known-answer retrieval report |
+| `make evaluate` | Evaluate the Inventory Agent and emit an immutable JSON report |
+| `make evaluate-bad` | Prove a known-bad candidate is blocked with metric-level reasons |
 | `make down` | Stop the local PostgreSQL container without deleting its volume |
 
 Run `make lock` after deliberately changing dependencies in `pyproject.toml`, then commit
@@ -220,21 +251,23 @@ The architectural decision and its tradeoffs are recorded in
 [ADR 0001](docs/adr/0001-modular-monolith.md) and
 [ADR 0002](docs/adr/0002-provider-neutral-agent-runtime.md). The local retrieval decision is
 recorded in [ADR 0003](docs/adr/0003-deterministic-local-retrieval.md), and registry persistence
-in [ADR 0004](docs/adr/0004-postgresql-immutable-registry.md).
+in [ADR 0004](docs/adr/0004-postgresql-immutable-registry.md). Evaluation and release-gate
+determinism is recorded in [ADR 0005](docs/adr/0005-deterministic-evaluation-gates.md).
 
 ## Repository layout
 
 ```text
 apps/api/                  FastAPI composition root and transport behavior
-apps/web/                  Registry operator view backed by API calls
-packages/contracts/        Shared runtime, retrieval, health, and error schemas
+apps/web/                  Registry and evaluation operator views backed by API calls
+packages/contracts/        Shared runtime, retrieval, evaluation, health, and error schemas
 packages/registry/         PostgreSQL repository, lifecycle, bootstrap, and records
+packages/evaluation/       Runner, evaluators, gates, persistence, service, and CLI
 agents/shared/             Provider-neutral model, retrieval, corpus, and benchmark code
 agents/inventory/          Bounded graph, CLI, and read-only retail tools
 agents/knowledge/          Grounded policy-question agent and CLI
 agents/shopping/           Grounded recommendation agent, product tool, and CLI
 data/synthetic/            Versioned fictional retail evidence
-data/evals/                Versioned known-answer retrieval fixtures
+data/evals/                Versioned datasets, suites, gates, and retrieval fixtures
 data/manifests/            Versioned manifests for the three demonstration agents
 migrations/                Alembic environment and transactional schema revisions
 schemas/                   Published Agent Manifest JSON Schema

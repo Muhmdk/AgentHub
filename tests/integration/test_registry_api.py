@@ -169,3 +169,59 @@ def test_registry_console_is_backed_by_registry_api(registry_client: TestClient)
     assert "Agent registry" in response.text
     assert 'fetch("/registry/agents")' in response.text
     assert "innerHTML" not in response.text
+
+
+@pytest.mark.contract
+@pytest.mark.integration
+def test_evaluation_run_comparison_and_console_contracts(
+    registry_client: TestClient,
+) -> None:
+    registry_client.post(
+        "/registry/agents",
+        json=manifest_payload("inventory"),
+        headers={"X-AgentHub-Actor": "evaluation-api-test"},
+    )
+    successful = registry_client.post(
+        "/evaluations/runs",
+        json={
+            "agent_name": "inventory-agent",
+            "agent_version": "1.0.0",
+            "suite_id": "inventory-agent-suite",
+            "environment": "integration",
+        },
+    )
+    regressed = registry_client.post(
+        "/evaluations/runs",
+        json={
+            "agent_name": "inventory-agent",
+            "agent_version": "1.0.0",
+            "suite_id": "inventory-agent-suite",
+            "candidate_profile": "regressed",
+            "baseline_run_id": successful.json()["run_id"],
+            "environment": "integration",
+        },
+    )
+
+    assert successful.status_code == 200
+    assert successful.json()["gate"]["passed"] is True
+    assert regressed.status_code == 200
+    assert regressed.json()["gate"]["passed"] is False
+    assert any(
+        not reason["passed"] and reason["code"].endswith("failed")
+        for reason in regressed.json()["gate"]["reasons"]
+    )
+
+    run_id = regressed.json()["run_id"]
+    listing = registry_client.get("/evaluations/runs?agent_name=inventory-agent")
+    report = registry_client.get(f"/evaluations/runs/{run_id}")
+    comparison = registry_client.get(f"/evaluations/runs/{run_id}/comparison")
+    console = registry_client.get("/evaluations")
+
+    assert listing.status_code == 200
+    assert len(listing.json()) == 2
+    assert report.json()["artifact_hash"] == regressed.json()["artifact_hash"]
+    assert comparison.json() == regressed.json()["gate"]
+    assert console.status_code == 200
+    assert "Evaluation runs" in console.text
+    assert 'fetch("/evaluations/runs")' in console.text
+    assert "innerHTML" not in console.text

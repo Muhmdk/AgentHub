@@ -1,0 +1,23 @@
+{
+  "schema_version": "agenthub.dev/evaluation-suite/v1",
+  "suite_id": "inventory-agent-suite",
+  "version": "1.0.0",
+  "dataset_id": "inventory-agent",
+  "dataset_version": "1.0.0",
+  "evaluators": [
+    {"name": "correctness", "version": "1.0.0"},
+    {"name": "schema_validity", "version": "1.0.0"},
+    {"name": "groundedness", "version": "1.0.0"},
+    {"name": "tool_accuracy", "version": "1.0.0"},
+    {"name": "pii_leakage_rate", "version": "1.0.0"},
+    {"name": "harmful_output_rate", "version": "1.0.0"},
+    {"name": "unauthorized_tool_rate", "version": "1.0.0"},
+    {"name": "p95_latency_ms", "version": "1.0.0"},
+    {"name": "mean_total_tokens", "version": "1.0.0", "critical": false},
+    {"name": "mean_cost_usd", "version": "1.0.0"}
+  ],
+  "max_concurrency": 2,
+  "case_timeout_seconds": 5.0,
+  "gate_profile_id": "default",
+  "gate_profile_version": "1.0.0"
+}
