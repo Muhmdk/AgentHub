@@ -32,7 +32,9 @@ def test_v1_example_is_valid_in_json_schema_and_typed_contract(manifest_path: Pa
 @pytest.mark.unit
 def test_manifest_hash_is_canonical_and_changes_with_executable_identity() -> None:
     payload = json.loads(MANIFESTS[0].read_text(encoding="utf-8"))
+    payload["spec"]["model"]["parameters"] = {"temperature": 0, "seed": 7}
     first = AgentManifest.model_validate(payload)
+    payload["spec"]["model"]["parameters"] = {"seed": 7, "temperature": 0}
     reordered = AgentManifest.model_validate(dict(reversed(payload.items())))
     changed = first.model_copy(
         update={

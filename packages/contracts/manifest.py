@@ -1,6 +1,7 @@
 """Versioned, provider-neutral agent manifest contract."""
 
 import hashlib
+import json
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -116,5 +117,10 @@ class AgentManifest(BaseModel):
 
     @property
     def manifest_hash(self) -> str:
-        canonical = self.model_dump_json(by_alias=True, exclude_none=False)
+        canonical = json.dumps(
+            self.model_dump(mode="json", by_alias=True, exclude_none=False),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
         return hashlib.sha256(canonical.encode()).hexdigest()
