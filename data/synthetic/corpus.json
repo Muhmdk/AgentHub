@@ -9,43 +9,43 @@
       "document_id": "policy-returns-v1",
       "title": "Returns and exchanges",
       "content": "Unopened products may be returned within 30 days of purchase with the original receipt. Opened products may be exchanged within 14 days only when defective. Final-sale items cannot be returned.",
-      "metadata": {"kind": "policy", "topic": "returns", "source": "synthetic-agenthub"}
+      "metadata": {"kind": "policy", "topic": "returns", "source": "synthetic-agenthub", "trusted": true}
     },
     {
       "document_id": "policy-shipping-v1",
       "title": "Standard shipping",
       "content": "Standard shipping within Canada takes three to five business days. Orders over 75 dollars qualify for free standard shipping. Oversized products may have an additional delivery charge shown before checkout.",
-      "metadata": {"kind": "policy", "topic": "shipping", "source": "synthetic-agenthub"}
+      "metadata": {"kind": "policy", "topic": "shipping", "source": "synthetic-agenthub", "trusted": true}
     },
     {
       "document_id": "policy-price-match-v1",
       "title": "Price match policy",
       "content": "A price match is available for an identical in-stock product sold by a Canadian retailer. The request must be made within seven days of purchase. Marketplace sellers and clearance prices are excluded.",
-      "metadata": {"kind": "policy", "topic": "price-match", "source": "synthetic-agenthub"}
+      "metadata": {"kind": "policy", "topic": "price-match", "source": "synthetic-agenthub", "trusted": true}
     },
     {
       "document_id": "product-northpeak-shovel-v1",
       "title": "NorthPeak Aluminum Snow Shovel",
       "content": "The NorthPeak Aluminum Snow Shovel costs 39.99 dollars. Its lightweight aluminum blade and ergonomic grip are designed for clearing walkways and small driveways.",
-      "metadata": {"kind": "product", "sku": "snow-shovel", "name": "NorthPeak Aluminum Snow Shovel", "category": "snow-removal", "price": 39.99, "source": "synthetic-agenthub"}
+      "metadata": {"kind": "product", "sku": "snow-shovel", "name": "NorthPeak Aluminum Snow Shovel", "category": "snow-removal", "price": 39.99, "source": "synthetic-agenthub", "trusted": true}
     },
     {
       "document_id": "product-arcticpro-shovel-v1",
       "title": "ArcticPro Wide Snow Shovel",
       "content": "The ArcticPro Wide Snow Shovel costs 64.99 dollars. Its wide polymer blade moves deep snow quickly and the reinforced handle suits larger driveways.",
-      "metadata": {"kind": "product", "sku": "wide-snow-shovel", "name": "ArcticPro Wide Snow Shovel", "category": "snow-removal", "price": 64.99, "source": "synthetic-agenthub"}
+      "metadata": {"kind": "product", "sku": "wide-snow-shovel", "name": "ArcticPro Wide Snow Shovel", "category": "snow-removal", "price": 64.99, "source": "synthetic-agenthub", "trusted": true}
     },
     {
       "document_id": "product-ecogrip-melt-v1",
       "title": "EcoGrip Ice Melt 10 kg",
       "content": "EcoGrip Ice Melt costs 24.50 dollars for a 10 kilogram bag. It is formulated for sidewalks and works to minus 20 degrees Celsius when applied as directed.",
-      "metadata": {"kind": "product", "sku": "ice-melt-10kg", "name": "EcoGrip Ice Melt 10 kg", "category": "ice-control", "price": 24.5, "source": "synthetic-agenthub"}
+      "metadata": {"kind": "product", "sku": "ice-melt-10kg", "name": "EcoGrip Ice Melt 10 kg", "category": "ice-control", "price": 24.5, "source": "synthetic-agenthub", "trusted": true}
     },
     {
       "document_id": "product-thermal-gloves-v1",
       "title": "Thermal Work Gloves",
       "content": "Thermal Work Gloves cost 19.99 dollars. The water-resistant shell and insulated lining are intended for outdoor winter chores.",
-      "metadata": {"kind": "product", "sku": "thermal-work-gloves", "name": "Thermal Work Gloves", "category": "winter-apparel", "price": 19.99, "source": "synthetic-agenthub"}
+      "metadata": {"kind": "product", "sku": "thermal-work-gloves", "name": "Thermal Work Gloves", "category": "winter-apparel", "price": 19.99, "source": "synthetic-agenthub", "trusted": true}
     }
   ]
 }

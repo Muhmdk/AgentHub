@@ -20,6 +20,40 @@ from packages.contracts.retrieval import (
 from packages.contracts.runtime import JsonValue
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "be",
+        "can",
+        "for",
+        "i",
+        "in",
+        "is",
+        "of",
+        "on",
+        "the",
+        "to",
+        "what",
+        "with",
+        "within",
+    }
+)
+
+
+def _tokens(text: str) -> list[str]:
+    tokens = []
+    for token in _TOKEN_PATTERN.findall(text.casefold()):
+        if token in _STOP_WORDS:
+            continue
+        if len(token) > 4 and token.endswith("ed"):
+            token = token[:-2]
+        elif len(token) > 3 and token.endswith("s"):
+            token = token[:-1]
+        tokens.append(token)
+    return tokens
 
 
 def content_hash(content: str) -> str:
@@ -93,19 +127,25 @@ class EmbeddingModel(Protocol):
     def embed(self, chunk_id: str, text: str) -> Embedding: ...
 
 
+class Retriever(Protocol):
+    """Provider-neutral retrieval boundary used by grounded agents and tools."""
+
+    def search(self, request: SearchRequest) -> tuple[list[SearchResult], RetrievalTrace]: ...
+
+
 class DeterministicEmbeddingModel:
     """Offline signed feature-hashing embedding for small deterministic corpora."""
 
     name = "fake/hash-embedding-v1"
 
-    def __init__(self, dimensions: int = 128) -> None:
+    def __init__(self, dimensions: int = 4096) -> None:
         if dimensions < 16:
             raise ValueError("Embedding dimensions must be at least 16")
         self._dimensions = dimensions
 
     def embed(self, chunk_id: str, text: str) -> Embedding:
         vector = [0.0] * self._dimensions
-        counts = Counter(_TOKEN_PATTERN.findall(text.casefold()))
+        counts = Counter(_tokens(text))
         for token, count in counts.items():
             digest = hashlib.sha256(token.encode()).digest()
             bucket = int.from_bytes(digest[:4]) % self._dimensions

@@ -133,6 +133,8 @@ class AgentErrorCode(StrEnum):
     EXECUTION_TIMEOUT = "execution_timeout"
     STEP_LIMIT = "step_limit"
     MODEL_ERROR = "model_error"
+    RETRIEVAL_ERROR = "retrieval_error"
+    RETRIEVAL_TIMEOUT = "retrieval_timeout"
 
 
 class ToolErrorCode(StrEnum):
