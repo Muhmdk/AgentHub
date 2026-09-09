@@ -82,27 +82,44 @@ def test_end_to_end_spans_propagate_context_without_prompt_content() -> None:
                 "X-AgentHub-Release-ID": "release-42",
             },
         )
+        fleet_response = client.get("/observability/fleet")
+        detail_response = client.get("/observability/agents/knowledge-agent")
+        page_response = client.get("/observability")
 
     assert response.status_code == 200
     assert response.headers["X-Trace-ID"] == incoming_trace_id
     assert response.headers["traceparent"].split("-")[1] == incoming_trace_id
     spans = exporter.get_finished_spans()
-    assert {span.name for span in spans} >= {
+    propagated_spans = [
+        span for span in spans if f"{span.context.trace_id:032x}" == incoming_trace_id
+    ]
+    assert {span.name for span in propagated_spans} >= {
         "HTTP POST",
         "agent.invoke",
         "rag.retrieve",
         "model.generate",
     }
-    assert {f"{span.context.trace_id:032x}" for span in spans} == {incoming_trace_id}
     exported = " ".join(
         f"{key}={value}" for span in spans for key, value in (span.attributes or {}).items()
     )
     assert "Can I return" not in exported
     assert "otel-contract-1" in exported
     assert "release-42" in exported
-    server = next(span for span in spans if span.name == "HTTP POST")
+    server = next(span for span in propagated_spans if span.name == "HTTP POST")
     assert server.attributes is not None
     assert server.attributes["http.route"] == "/agents/knowledge/invoke"
+    assert fleet_response.status_code == 200
+    knowledge = next(
+        agent
+        for agent in fleet_response.json()["agents"]
+        if agent["agent_name"] == "knowledge-agent"
+    )
+    assert knowledge["request_count"] == 1
+    assert knowledge["availability"] == 1
+    assert knowledge["last_trace_id"] == incoming_trace_id
+    assert detail_response.json() == knowledge
+    assert page_response.status_code == 200
+    assert "Fleet health" in page_response.text
 
 
 @pytest.mark.unit

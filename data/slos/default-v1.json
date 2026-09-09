@@ -1,0 +1,13 @@
+{
+  "schema_version": "agenthub.dev/slo-profile/v1",
+  "profile_id": "default",
+  "version": "1.0.0",
+  "objectives": [
+    {"objective_id": "availability", "indicator": "availability", "target": 0.99, "window_seconds": 2592000},
+    {"objective_id": "latency", "indicator": "latency", "target": 0.95, "window_seconds": 2592000, "threshold": 3000},
+    {"objective_id": "tool-success", "indicator": "tool_success", "target": 0.99, "window_seconds": 2592000},
+    {"objective_id": "groundedness", "indicator": "groundedness", "target": 0.95, "window_seconds": 2592000, "threshold": 0.95},
+    {"objective_id": "evaluation-pass-rate", "indicator": "evaluation_pass_rate", "target": 0.95, "window_seconds": 2592000},
+    {"objective_id": "cost", "indicator": "cost", "target": 0.99, "window_seconds": 2592000, "threshold": 0.025}
+  ]
+}

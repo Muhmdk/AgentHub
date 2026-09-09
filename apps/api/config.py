@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     otel_endpoint: str = Field(default="http://127.0.0.1:4318", min_length=1, max_length=500)
     otel_export_interval_ms: int = Field(default=5000, ge=100, le=60000)
     otel_max_queue_size: int = Field(default=256, ge=64, le=4096)
+    observability_grafana_url: str = Field(
+        default="http://127.0.0.1:3000",
+        min_length=1,
+        max_length=500,
+    )
     database_url: str = Field(
         default="postgresql+psycopg://agenthub:agenthub@127.0.0.1:5433/agenthub",
         min_length=1,

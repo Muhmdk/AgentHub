@@ -86,6 +86,8 @@ class Telemetry:
     ) -> None:
         self.config = config
         self.observations = observations or ObservationStore()
+        self._trace_lock = Lock()
+        self._last_trace_ids: dict[str, str] = {}
         resource = Resource.create(
             {
                 Attribute.SERVICE_NAME.value: config.service_name,
@@ -197,6 +199,10 @@ class Telemetry:
         success: bool,
     ) -> None:
         labels = metric_attributes(attributes)
+        agent_name = labels.get(Attribute.AGENT_NAME.value)
+        trace_id = self.trace_id()
+        if isinstance(agent_name, str) and trace_id is not None:
+            self.remember_trace(agent_name, trace_id)
         self.agent_requests.add(1, labels)
         self.agent_duration.record(duration_ms, labels)
         if not success:
@@ -234,8 +240,14 @@ class Telemetry:
         cost_usd: float,
     ) -> None:
         labels = metric_attributes(attributes)
-        self.model_tokens.add(input_tokens, {**labels, "token.type": "input"})
-        self.model_tokens.add(output_tokens, {**labels, "token.type": "output"})
+        self.model_tokens.add(
+            input_tokens,
+            {**labels, Attribute.TOKEN_TYPE.value: "input"},
+        )
+        self.model_tokens.add(
+            output_tokens,
+            {**labels, Attribute.TOKEN_TYPE.value: "output"},
+        )
         self.model_cost.add(cost_usd, labels)
         self.observations.record("model.tokens", input_tokens + output_tokens, labels)
         self.observations.record("model.cost_usd", cost_usd, labels)
@@ -260,6 +272,27 @@ class Telemetry:
         labels = metric_attributes(attributes)
         self.policy_denials.add(1, labels)
         self.observations.record("policy.denial", 1, labels)
+
+    def remember_trace(self, agent_name: str, trace_id: str) -> None:
+        """Remember one safe trace link per bounded agent dimension."""
+        safe_name = metric_attributes({Attribute.AGENT_NAME: agent_name}).get(
+            Attribute.AGENT_NAME.value
+        )
+        if safe_name in {None, "unknown"} or len(trace_id) != 32:
+            return
+        try:
+            int(trace_id, 16)
+        except ValueError:
+            return
+        with self._trace_lock:
+            if len(self._last_trace_ids) >= 128 and safe_name not in self._last_trace_ids:
+                oldest = next(iter(self._last_trace_ids))
+                del self._last_trace_ids[oldest]
+            self._last_trace_ids[str(safe_name)] = trace_id.lower()
+
+    def last_trace_id(self, agent_name: str) -> str | None:
+        with self._trace_lock:
+            return self._last_trace_ids.get(agent_name)
 
     def shutdown(self) -> None:
         """Flush within SDK-configured deadlines; exporter failures remain non-fatal."""

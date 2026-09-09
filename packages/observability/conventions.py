@@ -22,6 +22,7 @@ class Attribute(StrEnum):
     ERROR_TYPE = "error.type"
     INPUT_TOKENS = "gen_ai.usage.input_tokens"
     OUTPUT_TOKENS = "gen_ai.usage.output_tokens"
+    TOKEN_TYPE = "gen_ai.token.type"
     ESTIMATED_COST_USD = "agenthub.estimated_cost_usd"
     EVALUATION_SUITE = "evaluation.suite"
     EVALUATION_METRIC = "evaluation.metric"
@@ -41,6 +42,7 @@ METRIC_ATTRIBUTE_ALLOWLIST = frozenset(
         Attribute.AGENT_VERSION,
         Attribute.MODEL_PROVIDER,
         Attribute.MODEL_DEPLOYMENT,
+        Attribute.TOKEN_TYPE,
         Attribute.TOOL_NAME,
         Attribute.RAG_CORPUS,
         Attribute.EVALUATION_SUITE,

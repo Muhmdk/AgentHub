@@ -21,7 +21,7 @@ from apps.api.config import Settings, load_settings
 from apps.api.errors import register_error_handlers
 from apps.api.logging import configure_logging
 from apps.api.middleware import correlation_middleware
-from apps.web import evaluation_page_path, registry_page_path
+from apps.web import evaluation_page_path, observability_page_path, registry_page_path
 from packages.contracts.evaluation import (
     EvaluationRunReport,
     EvaluationRunSummary,
@@ -30,6 +30,7 @@ from packages.contracts.evaluation import (
 )
 from packages.contracts.health import HealthResponse, VersionResponse
 from packages.contracts.manifest import AgentManifest
+from packages.contracts.observability import AgentHealth, FleetHealth
 from packages.contracts.registry import (
     AgentSummary,
     AgentVersionView,
@@ -42,6 +43,7 @@ from packages.contracts.runtime import AgentRequest, AgentResponse
 from packages.evaluation.repository import EvaluationRepository, EvaluationStore
 from packages.evaluation.service import EvaluationService
 from packages.observability.conventions import Attribute
+from packages.observability.slos import fleet_health
 from packages.observability.telemetry import Telemetry, TelemetryConfig
 from packages.registry.database import Database
 from packages.registry.repository import RegistryRepository, RegistryStore
@@ -349,6 +351,40 @@ def create_app(
     @app.get("/evaluations", response_class=FileResponse, include_in_schema=False)
     async def evaluation_console() -> FileResponse:
         return FileResponse(evaluation_page_path())
+
+    async def current_fleet_health() -> FleetHealth:
+        summaries = await asyncio.to_thread(registry.list_agents)
+        versions = {
+            "inventory-agent": "1.0.0",
+            "knowledge-agent": "1.0.0",
+            "shopping-agent": "1.0.0",
+        }
+        versions.update({str(summary.name): str(summary.latest_version) for summary in summaries})
+        return fleet_health(telemetry, versions)
+
+    @app.get(
+        "/observability/fleet",
+        response_model=FleetHealth,
+        tags=["observability"],
+    )
+    async def get_fleet_health() -> FleetHealth:
+        return await current_fleet_health()
+
+    @app.get(
+        "/observability/agents/{agent_name}",
+        response_model=AgentHealth,
+        tags=["observability"],
+    )
+    async def get_agent_health(agent_name: str) -> AgentHealth:
+        health = await current_fleet_health()
+        for agent in health.agents:
+            if agent.agent_name == agent_name:
+                return agent
+        raise HTTPException(status_code=404, detail="Agent observability data was not found")
+
+    @app.get("/observability", response_class=FileResponse, include_in_schema=False)
+    async def observability_console() -> FileResponse:
+        return FileResponse(observability_page_path())
 
     return app
 
