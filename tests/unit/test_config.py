@@ -11,7 +11,8 @@ def clear_settings_cache() -> None:
 
 
 @pytest.mark.unit
-def test_settings_have_safe_local_defaults() -> None:
+def test_settings_have_safe_local_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AGENTHUB_DATABASE_URL", raising=False)
     settings = Settings(_env_file=None)
 
     assert settings.environment == "local"
