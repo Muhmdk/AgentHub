@@ -61,7 +61,7 @@ async def validation_exception_handler(request: Request, exc: Exception) -> Resp
 
 
 async def unexpected_exception_handler(request: Request, exc: Exception) -> Response:
-    logger.exception(
+    logger.error(
         "unhandled_request_error",
         extra={"error_type": type(exc).__name__, "path": request.url.path},
     )

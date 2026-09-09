@@ -81,7 +81,7 @@ def test_validation_errors_do_not_echo_submitted_values() -> None:
 
 
 @pytest.mark.contract
-def test_unexpected_errors_are_safe() -> None:
+def test_unexpected_errors_are_safe(capsys: pytest.CaptureFixture[str]) -> None:
     app = create_app(Settings(environment="test", _env_file=None))
 
     @app.get("/failure-probe")
@@ -101,3 +101,4 @@ def test_unexpected_errors_are_safe() -> None:
         }
     }
     assert "sensitive internal detail" not in response.text
+    assert "sensitive internal detail" not in capsys.readouterr().err
