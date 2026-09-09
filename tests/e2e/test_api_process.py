@@ -72,3 +72,26 @@ def test_server_process_reports_readiness(running_api: str) -> None:
     assert response.status == 200
     assert response.headers["X-Correlation-ID"] == "process-smoke"
     assert body == {"status": "ready", "service": "agenthub-api"}
+
+
+@pytest.mark.integration
+@pytest.mark.e2e
+def test_server_process_invokes_inventory_agent(running_api: str) -> None:
+    request = urllib.request.Request(
+        f"{running_api}/agents/inventory/invoke",
+        data=json.dumps(
+            {"query": "Which Toronto stores may run low on snow shovels this weekend?"}
+        ).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "X-Correlation-ID": "inventory-process-smoke",
+        },
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request, timeout=5) as response:
+        body = json.load(response)
+
+    assert response.status == 200
+    assert "Queen Street may run low" in body["answer"]
+    assert len(body["citations"]) == 6

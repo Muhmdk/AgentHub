@@ -102,3 +102,50 @@ def test_unexpected_errors_are_safe(capsys: pytest.CaptureFixture[str]) -> None:
     }
     assert "sensitive internal detail" not in response.text
     assert "sensitive internal detail" not in capsys.readouterr().err
+
+
+@pytest.mark.contract
+def test_inventory_invocation_returns_answer_and_evidence(client: TestClient) -> None:
+    response = client.post(
+        "/agents/inventory/invoke",
+        json={
+            "query": "Which Toronto stores may run low on snow shovels this weekend?",
+            "seed": 11,
+            "as_of": "2026-09-08",
+        },
+        headers={"X-Correlation-ID": "inventory-contract"},
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert response.headers["X-Correlation-ID"] == "inventory-contract"
+    assert "Queen Street may run low" in body["answer"]
+    assert body["model"] == "fake/deterministic-v1"
+    assert [call["tool_name"] for call in body["tool_calls"]] == [
+        "inventory.read",
+        "sales.read",
+        "promotions.read",
+        "weather.read",
+    ]
+    assert len(body["citations"]) == 6
+
+
+@pytest.mark.contract
+def test_inventory_invocation_rejects_unsupported_question(client: TestClient) -> None:
+    unknown = "sensitive-unknown-place"
+    response = client.post(
+        "/agents/inventory/invoke",
+        json={"query": f"Will shovels run low in {unknown}?"},
+        headers={"X-Correlation-ID": "inventory-invalid"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "invalid_request",
+            "message": "Ask about a supported city and product",
+            "correlation_id": "inventory-invalid",
+            "details": [],
+        }
+    }
+    assert unknown not in response.text
