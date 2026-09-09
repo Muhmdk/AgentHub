@@ -7,8 +7,8 @@ is being delivered in twelve independently reviewable phases described in
 
 ## Current status
 
-Phases 00 and 01 provide the local development foundation, a working control-plane API,
-and one bounded demonstration agent.
+Phases 00 through 02 provide the local development foundation, a working control-plane API,
+and three bounded demonstration agents.
 The repository currently includes:
 
 - FastAPI liveness, readiness, and version endpoints;
@@ -17,13 +17,16 @@ The repository currently includes:
 - consistent, non-sensitive API error envelopes;
 - a deterministic fake model behind a provider-neutral interface;
 - a bounded LangGraph Inventory Agent with four typed, read-only retail tools;
+- a deterministic, versioned local retrieval pipeline with idempotent ingestion;
+- grounded Knowledge and Shopping Agents with citations, abstention, and retrieval traces;
+- a versioned six-query retrieval benchmark and prompt-injection defenses;
 - synthetic store, SKU, inventory, sales, promotion, and weather evidence;
 - unit, contract, and process-level smoke tests;
 - linting, formatting, strict typing, coverage, secret scanning, and dependency auditing;
 - a least-privilege GitHub Actions CI workflow.
 
-The Knowledge and Shopping Agents, persistence, evaluation, governance, deployment, and the
-operator console are planned for later phases and are not represented as implemented here.
+Persistence, broader evaluation, governance, deployment, and the operator console are planned
+for later phases and are not represented as implemented here.
 
 ## Prerequisites
 
@@ -32,7 +35,7 @@ operator console are planned for later phases and are not represented as impleme
 - Git
 
 No cloud account, provider credential, model API key, container runtime, or database is
-needed for Phases 00 or 01.
+needed for Phases 00 through 02.
 
 ## Inventory Agent demo
 
@@ -47,6 +50,23 @@ only committed synthetic evidence. It reports Queen Street as at risk and York M
 currently at risk, followed by the four tool calls, their source IDs, citations, and normalized
 fake-model usage. See the [Inventory Agent walkthrough](docs/demos/inventory-agent.md) for the
 calculation, limitations, API example, and alternate CLI inputs.
+
+## RAG agent demos
+
+Validate and ingest the committed corpus, run both grounded agents, and measure retrieval:
+
+```bash
+make ingest-corpus
+make demo-knowledge
+make demo-shopping
+make benchmark-rag
+```
+
+The Knowledge Agent answers a returns-policy question. The Shopping Agent recommends a snow
+shovel under a stated budget using only `product.search`. Both return document citations and a
+retrieval trace. The benchmark currently finds all six expected documents in its top-three
+results. See the [RAG agent walkthrough](docs/demos/rag-agents.md) for HTTP examples, corpus
+provenance, safety behavior, and limitations.
 
 ## Quick start
 
@@ -87,6 +107,8 @@ Stop the foreground server with `Ctrl-C`. Interactive API documentation is avail
 | `GET /health/ready` | Confirms current process dependencies are ready | `200` |
 | `GET /version` | Reports service, build version, and environment | `200` |
 | `POST /agents/inventory/invoke` | Runs the bounded Inventory Agent | `200` |
+| `POST /agents/knowledge/invoke` | Answers from trusted policy evidence or abstains | `200` |
+| `POST /agents/shopping/invoke` | Recommends a retrieved product through `product.search` | `200` |
 
 Clients may provide `X-Correlation-ID` using letters, numbers, `.`, `_`, `:`, or `-`, up
 to 128 characters. AgentHub returns the accepted ID in the response. Missing or unsafe
@@ -131,6 +153,9 @@ take the same names and take precedence.
 | `AGENTHUB_AGENT_MAX_STEPS` | `3` | `1` through `20` |
 | `AGENTHUB_TOOL_TIMEOUT_SECONDS` | `1.0` | Greater than `0`, at most `30` |
 | `AGENTHUB_AGENT_TIMEOUT_SECONDS` | `5.0` | Greater than `0`, at most `120` |
+| `AGENTHUB_RAG_TOP_K` | `3` | `1` through `20` |
+| `AGENTHUB_RAG_MINIMUM_SCORE` | `0.15` | `0` through `1` |
+| `AGENTHUB_RETRIEVAL_TIMEOUT_SECONDS` | `5.0` | Greater than `0`, at most `120` |
 
 Malformed configuration stops startup with the invalid field and error category. The
 submitted value is deliberately omitted so a mistaken secret cannot be echoed.
@@ -151,6 +176,10 @@ submitted value is deliberately omitted so a mistaken secret cannot be echoed.
 | `make security` | Scan tracked files for secrets and audit dependencies |
 | `make run` | Run the API in the foreground |
 | `make demo-inventory` | Run the deterministic Inventory Agent CLI |
+| `make demo-knowledge` | Run the grounded Knowledge Agent CLI |
+| `make demo-shopping` | Run the grounded Shopping Agent CLI |
+| `make ingest-corpus` | Validate ingestion and verify unchanged chunks are not duplicated |
+| `make benchmark-rag` | Print the versioned known-answer retrieval report |
 | `make down` | Explain how to stop the foreground local service |
 
 Run `make lock` after deliberately changing dependencies in `pyproject.toml`, then commit
@@ -170,16 +199,20 @@ the resulting `uv.lock` change with the dependency change.
 
 The architectural decision and its tradeoffs are recorded in
 [ADR 0001](docs/adr/0001-modular-monolith.md) and
-[ADR 0002](docs/adr/0002-provider-neutral-agent-runtime.md).
+[ADR 0002](docs/adr/0002-provider-neutral-agent-runtime.md). The local retrieval decision is
+recorded in [ADR 0003](docs/adr/0003-deterministic-local-retrieval.md).
 
 ## Repository layout
 
 ```text
 apps/api/                  FastAPI composition root and transport behavior
-packages/contracts/        Shared health, metadata, and error schemas
-agents/shared/             Provider-neutral model boundary and fake adapter
+packages/contracts/        Shared runtime, retrieval, health, and error schemas
+agents/shared/             Provider-neutral model, retrieval, corpus, and benchmark code
 agents/inventory/          Bounded graph, CLI, and read-only retail tools
+agents/knowledge/          Grounded policy-question agent and CLI
+agents/shopping/           Grounded recommendation agent, product tool, and CLI
 data/synthetic/            Versioned fictional retail evidence
+data/evals/                Versioned known-answer retrieval fixtures
 tests/unit/                Configuration and logging behavior
 tests/contract/            HTTP response contracts
 tests/e2e/                 Real server-process smoke test
