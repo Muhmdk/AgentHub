@@ -19,7 +19,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "detect-secrets>=1.5,<2",
-  "httpx>=0.28,<1",
+  "httpx2>=2.12,<3",
   "mypy>=1.14,<2",
   "pip-audit>=2.8,<3",
   "pytest>=8.3,<10",
@@ -45,6 +45,9 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --cov=apps --cov=packages --cov-report=term-missing --cov-report=xml --cov-fail-under=90"
 testpaths = ["tests"]
+filterwarnings = [
+  "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning:starlette.testclient",
+]
 markers = [
   "unit: isolated domain or configuration test",
   "contract: HTTP or schema contract test",
