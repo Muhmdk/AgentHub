@@ -47,4 +47,3 @@ Tradeoffs:
 
 These tradeoffs are acceptable for the current scope and are easier to reverse than an
 unnecessary distributed architecture.
-

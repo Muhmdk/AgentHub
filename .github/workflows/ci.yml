@@ -56,4 +56,3 @@ jobs:
           done
           cat agenthub-api.log
           exit 1
-
