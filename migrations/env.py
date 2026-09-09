@@ -6,6 +6,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import packages.registry.models  # noqa: F401
 from packages.registry.database import RegistryBase
 
 config = context.config
