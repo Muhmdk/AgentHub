@@ -28,16 +28,16 @@ test:
 	$(BIN)/pytest
 
 test-unit:
-	$(BIN)/pytest -m unit
+	$(BIN)/pytest -m unit --no-cov
 
 test-contract:
-	$(BIN)/pytest -m contract
+	$(BIN)/pytest -m contract --no-cov
 
 test-integration:
-	$(BIN)/pytest -m integration
+	$(BIN)/pytest -m integration --no-cov
 
 test-e2e:
-	$(BIN)/pytest -m e2e
+	$(BIN)/pytest -m e2e --no-cov
 
 security:
 	git ls-files -z | xargs -0 $(BIN)/detect-secrets-hook --baseline .secrets.baseline
