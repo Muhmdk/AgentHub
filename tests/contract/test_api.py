@@ -6,6 +6,18 @@ from fastapi.testclient import TestClient
 
 from apps.api.config import Settings
 from apps.api.main import create_app
+from packages.registry.database import Database
+
+
+class UnreadyDatabase(Database):
+    def __init__(self) -> None:
+        pass
+
+    def ping(self) -> bool:
+        return False
+
+    def dispose(self) -> None:
+        pass
 
 
 @pytest.fixture
@@ -34,6 +46,26 @@ def test_service_endpoints_return_documented_contracts(
     assert response.status_code == 200
     assert response.json() == expected
     assert response.headers["X-Correlation-ID"]
+
+
+@pytest.mark.contract
+def test_readiness_reports_unavailable_database_without_internal_details() -> None:
+    app = create_app(Settings(environment="test", _env_file=None), database=UnreadyDatabase())
+
+    with TestClient(app, raise_server_exceptions=False) as local_client:
+        response = local_client.get(
+            "/health/ready", headers={"X-Correlation-ID": "database-unready"}
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "error": {
+            "code": "http_error",
+            "message": "Database is not ready",
+            "correlation_id": "database-unready",
+            "details": [],
+        }
+    }
 
 
 @pytest.mark.contract

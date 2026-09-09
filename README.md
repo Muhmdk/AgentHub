@@ -7,8 +7,8 @@ is being delivered in twelve independently reviewable phases described in
 
 ## Current status
 
-Phases 00 through 02 provide the local development foundation, a working control-plane API,
-and three bounded demonstration agents.
+Phases 00 through 03 provide the local development foundation, three bounded demonstration
+agents, and the first persistent control-plane domain.
 The repository currently includes:
 
 - FastAPI liveness, readiness, and version endpoints;
@@ -20,22 +20,26 @@ The repository currently includes:
 - a deterministic, versioned local retrieval pipeline with idempotent ingestion;
 - grounded Knowledge and Shopping Agents with citations, abstention, and retrieval traces;
 - a versioned six-query retrieval benchmark and prompt-injection defenses;
+- a PostgreSQL registry for immutable agent versions and lifecycle state;
+- idempotent manifest registration, optimistic concurrency, and append-only audits;
+- registry APIs and a small operator inventory view backed by persisted data;
 - synthetic store, SKU, inventory, sales, promotion, and weather evidence;
 - unit, contract, and process-level smoke tests;
 - linting, formatting, strict typing, coverage, secret scanning, and dependency auditing;
 - a least-privilege GitHub Actions CI workflow.
 
-Persistence, broader evaluation, governance, deployment, and the operator console are planned
-for later phases and are not represented as implemented here.
+Broader evaluation, governance, deployment automation, and incident operations are planned for
+later phases and are not represented as implemented here.
 
 ## Prerequisites
 
 - Python 3.14
 - GNU Make
 - Git
+- Docker with Compose
 
-No cloud account, provider credential, model API key, container runtime, or database is
-needed for Phases 00 through 02.
+No cloud account, provider credential, or model API key is needed. Phase 03 uses the documented
+local PostgreSQL container; host port `5433` avoids the common default PostgreSQL port.
 
 ## Inventory Agent demo
 
@@ -74,6 +78,9 @@ From a clean clone:
 
 ```bash
 make setup
+make up
+make migrate
+make seed-registry
 make test
 make run
 ```
@@ -97,7 +104,8 @@ Expected responses:
 ```
 
 Stop the foreground server with `Ctrl-C`. Interactive API documentation is available at
-`http://127.0.0.1:8000/docs` while the service is running.
+`http://127.0.0.1:8000/docs` while the service is running. The registry console is available at
+`http://127.0.0.1:8000/registry`. Run `make down` when the local database is no longer needed.
 
 ## API contracts
 
@@ -109,6 +117,13 @@ Stop the foreground server with `Ctrl-C`. Interactive API documentation is avail
 | `POST /agents/inventory/invoke` | Runs the bounded Inventory Agent | `200` |
 | `POST /agents/knowledge/invoke` | Answers from trusted policy evidence or abstains | `200` |
 | `POST /agents/shopping/invoke` | Recommends a retrieved product through `product.search` | `200` |
+| `POST /registry/agents` | Idempotently registers an immutable manifest | `200` |
+| `GET /registry/agents` | Lists persisted agent identities and current state | `200` |
+| `GET /registry/agents/{name}` | Gets one agent summary | `200` |
+| `GET /registry/agents/{name}/versions` | Lists immutable version history | `200` |
+| `GET /registry/agents/{name}/versions/{version}` | Gets a complete manifest version | `200` |
+| `POST /registry/agents/{name}/versions/{version}/transitions` | Applies a legal lifecycle change | `200` |
+| `GET /registry/agents/{name}/versions/{version}/audit` | Lists append-only registry events | `200` |
 
 Clients may provide `X-Correlation-ID` using letters, numbers, `.`, `_`, `:`, or `-`, up
 to 128 characters. AgentHub returns the accepted ID in the response. Missing or unsafe
@@ -156,6 +171,7 @@ take the same names and take precedence.
 | `AGENTHUB_RAG_TOP_K` | `3` | `1` through `20` |
 | `AGENTHUB_RAG_MINIMUM_SCORE` | `0.15` | `0` through `1` |
 | `AGENTHUB_RETRIEVAL_TIMEOUT_SECONDS` | `5.0` | Greater than `0`, at most `120` |
+| `AGENTHUB_DATABASE_URL` | Local PostgreSQL on port `5433` | SQLAlchemy PostgreSQL URL |
 
 Malformed configuration stops startup with the invalid field and error category. The
 submitted value is deliberately omitted so a mistaken secret cannot be echoed.
@@ -174,13 +190,16 @@ submitted value is deliberately omitted so a mistaken secret cannot be echoed.
 | `make test-integration` | Run component/process integration tests |
 | `make test-e2e` | Run the process-level readiness smoke test |
 | `make security` | Scan tracked files for secrets and audit dependencies |
+| `make up` | Start and health-check the local PostgreSQL container |
+| `make migrate` | Upgrade the configured database to the latest Alembic revision |
+| `make seed-registry` | Idempotently register the three committed demo manifests |
 | `make run` | Run the API in the foreground |
 | `make demo-inventory` | Run the deterministic Inventory Agent CLI |
 | `make demo-knowledge` | Run the grounded Knowledge Agent CLI |
 | `make demo-shopping` | Run the grounded Shopping Agent CLI |
 | `make ingest-corpus` | Validate ingestion and verify unchanged chunks are not duplicated |
 | `make benchmark-rag` | Print the versioned known-answer retrieval report |
-| `make down` | Explain how to stop the foreground local service |
+| `make down` | Stop the local PostgreSQL container without deleting its volume |
 
 Run `make lock` after deliberately changing dependencies in `pyproject.toml`, then commit
 the resulting `uv.lock` change with the dependency change.
@@ -200,28 +219,36 @@ the resulting `uv.lock` change with the dependency change.
 The architectural decision and its tradeoffs are recorded in
 [ADR 0001](docs/adr/0001-modular-monolith.md) and
 [ADR 0002](docs/adr/0002-provider-neutral-agent-runtime.md). The local retrieval decision is
-recorded in [ADR 0003](docs/adr/0003-deterministic-local-retrieval.md).
+recorded in [ADR 0003](docs/adr/0003-deterministic-local-retrieval.md), and registry persistence
+in [ADR 0004](docs/adr/0004-postgresql-immutable-registry.md).
 
 ## Repository layout
 
 ```text
 apps/api/                  FastAPI composition root and transport behavior
+apps/web/                  Registry operator view backed by API calls
 packages/contracts/        Shared runtime, retrieval, health, and error schemas
+packages/registry/         PostgreSQL repository, lifecycle, bootstrap, and records
 agents/shared/             Provider-neutral model, retrieval, corpus, and benchmark code
 agents/inventory/          Bounded graph, CLI, and read-only retail tools
 agents/knowledge/          Grounded policy-question agent and CLI
 agents/shopping/           Grounded recommendation agent, product tool, and CLI
 data/synthetic/            Versioned fictional retail evidence
 data/evals/                Versioned known-answer retrieval fixtures
+data/manifests/            Versioned manifests for the three demonstration agents
+migrations/                Alembic environment and transactional schema revisions
+schemas/                   Published Agent Manifest JSON Schema
 tests/unit/                Configuration and logging behavior
 tests/contract/            HTTP response contracts
+tests/integration/         PostgreSQL repository, migration, API, and concurrency checks
 tests/e2e/                 Real server-process smoke test
 docs/adr/                  Accepted architectural decisions
 docs/demos/                Reproducible operator demonstrations
 ```
 
-PostgreSQL is intentionally deferred until registry persistence is implemented in Phase 03.
-See [CONTRIBUTING.md](CONTRIBUTING.md) before making changes.
+Manifest fields, legal lifecycle transitions, audit guarantees, and API examples are documented
+in the [registry guide](docs/registry/manifests-and-lifecycle.md). See
+[CONTRIBUTING.md](CONTRIBUTING.md) before making changes.
 
 ## License
 

@@ -8,8 +8,11 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
+
+ROOT = Path(__file__).parents[2]
 
 
 def _available_port() -> int:
@@ -123,3 +126,29 @@ def test_server_process_invokes_grounded_agents(
     assert answer_fragment in body["answer"]
     assert body["citations"]
     assert body["retrieval"]["corpus_version"] == "v1"
+
+
+@pytest.mark.integration
+@pytest.mark.e2e
+def test_server_process_registers_manifest_and_serves_console(running_api: str) -> None:
+    manifest = (ROOT / "data" / "manifests" / "inventory-agent-v1.json").read_bytes()
+    register_request = urllib.request.Request(
+        f"{running_api}/registry/agents",
+        data=manifest,
+        headers={
+            "Content-Type": "application/json",
+            "X-AgentHub-Actor": "process-test",
+            "X-Correlation-ID": "registry-process",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(register_request, timeout=5) as response:
+        registered = json.load(response)
+    with urllib.request.urlopen(f"{running_api}/registry/agents", timeout=5) as response:
+        agents = json.load(response)
+    with urllib.request.urlopen(f"{running_api}/registry", timeout=5) as response:
+        console = response.read().decode()
+
+    assert registered["agent_version"]["manifest"]["metadata"]["name"] == "inventory-agent"
+    assert any(agent["name"] == "inventory-agent" for agent in agents)
+    assert "Agent registry" in console

@@ -1,0 +1,25 @@
+{
+  "schema_version": "agenthub.dev/v1",
+  "kind": "AgentManifest",
+  "metadata": {
+    "name": "shopping-agent",
+    "display_name": "Shopping Agent",
+    "version": "1.0.0",
+    "owner": "retail-ai-team",
+    "risk_tier": "medium"
+  },
+  "spec": {
+    "source": {
+      "repository": "https://github.com/Muhmdk/AgentHub",
+      "commit_sha": "a88fb630a9e5aa377feee41fbb542be66ddba2ac"
+    },
+    "runtime": {
+      "entrypoint": "agents.shopping:ShoppingAgent",
+      "image": "ghcr.io/muhmdk/agenthub/shopping@sha256:f0c45d863d2df94054ce5f12a426d092ce91a0a8c82964e8d6745057f7747816"
+    },
+    "prompt": {"prompt_id": "product-recommendation", "version": "1.0.0"},
+    "model": {"provider": "fake", "name": "deterministic-v1", "parameters": {"temperature": 0}},
+    "tools": [{"name": "product.search", "scopes": ["catalog:read"]}],
+    "retrieval": {"corpus_id": "retail-products-policies", "corpus_version": "v1", "top_k": 5}
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "agenthub.dev/v1",
+  "kind": "AgentManifest",
+  "metadata": {
+    "name": "knowledge-agent",
+    "display_name": "Knowledge Agent",
+    "version": "1.0.0",
+    "owner": "retail-ai-team",
+    "risk_tier": "low"
+  },
+  "spec": {
+    "source": {
+      "repository": "https://github.com/Muhmdk/AgentHub",
+      "commit_sha": "a88fb630a9e5aa377feee41fbb542be66ddba2ac"
+    },
+    "runtime": {
+      "entrypoint": "agents.knowledge:KnowledgeAgent",
+      "image": "ghcr.io/muhmdk/agenthub/knowledge@sha256:97e27cea36c208ddaf708d0ba8ab21ba80aceb83699187183327fdaaea43eb54"
+    },
+    "prompt": {"prompt_id": "policy-answer", "version": "1.0.0"},
+    "model": {"provider": "fake", "name": "deterministic-v1", "parameters": {"temperature": 0}},
+    "retrieval": {"corpus_id": "retail-products-policies", "corpus_version": "v1", "top_k": 3}
+  }
+}

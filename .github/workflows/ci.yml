@@ -17,6 +17,23 @@ jobs:
     name: Quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: agenthub
+          POSTGRES_USER: agenthub
+          POSTGRES_PASSWORD: agenthub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agenthub -d agenthub"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
 
     steps:
       - name: Check out repository
@@ -35,6 +52,9 @@ jobs:
 
       - name: Static type check
         run: make typecheck
+
+      - name: Migrate empty database
+        run: make migrate
 
       - name: Test with coverage
         run: make test

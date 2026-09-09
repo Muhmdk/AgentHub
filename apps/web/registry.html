@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AgentHub Registry</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+      body { margin: 0; background: #0b1020; color: #ecf2ff; }
+      main { width: min(1080px, calc(100% - 40px)); margin: 48px auto; }
+      header { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+      h1 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); letter-spacing: -0.05em; }
+      header p, .muted { color: #9caacc; }
+      #status { min-height: 24px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+      article { background: #141c33; border: 1px solid #293554; border-radius: 14px; padding: 20px; }
+      article button { all: unset; cursor: pointer; display: block; width: 100%; }
+      article button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 6px; }
+      h2 { margin: 0 0 8px; font-size: 1.15rem; }
+      dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 18px 0 0; }
+      dt { color: #9caacc; } dd { margin: 0; text-align: right; }
+      .state { color: #7dd3fc; font-weight: 700; text-transform: uppercase; font-size: .78rem; }
+      #history { margin-top: 30px; }
+      table { width: 100%; border-collapse: collapse; background: #141c33; border-radius: 14px; overflow: hidden; }
+      th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid #293554; }
+      th { color: #9caacc; font-weight: 500; }
+      @media (max-width: 620px) { header { display: block; } table { font-size: .85rem; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div><p>CONTROL PLANE</p><h1>Agent registry</h1></div>
+        <p>Immutable versions · auditable lifecycle</p>
+      </header>
+      <p id="status" role="status">Loading registered agents…</p>
+      <section id="agents" class="grid" aria-label="Registered agents"></section>
+      <section id="history" aria-live="polite"></section>
+    </main>
+    <script>
+      const status = document.querySelector("#status");
+      const agents = document.querySelector("#agents");
+      const history = document.querySelector("#history");
+
+      function element(name, text, className) {
+        const node = document.createElement(name);
+        node.textContent = text;
+        if (className) node.className = className;
+        return node;
+      }
+
+      async function showHistory(agent) {
+        history.replaceChildren(element("p", "Loading version history…", "muted"));
+        const response = await fetch(`/registry/agents/${encodeURIComponent(agent.name)}/versions`);
+        if (!response.ok) throw new Error("Version history is unavailable");
+        const versions = await response.json();
+        const heading = element("h2", `${agent.display_name} versions`);
+        const table = document.createElement("table");
+        const head = document.createElement("tr");
+        ["Version", "Environment state", "Owner", "Manifest hash"].forEach(label => head.append(element("th", label)));
+        const thead = document.createElement("thead"); thead.append(head); table.append(thead);
+        const tbody = document.createElement("tbody");
+        versions.forEach(version => {
+          const row = document.createElement("tr");
+          [version.version, version.lifecycle_state, version.manifest.metadata.owner, version.manifest_hash.slice(0, 12)]
+            .forEach(value => row.append(element("td", value)));
+          tbody.append(row);
+        });
+        table.append(tbody); history.replaceChildren(heading, table);
+      }
+
+      async function loadAgents() {
+        try {
+          const response = await fetch("/registry/agents");
+          if (!response.ok) throw new Error("Registry API is unavailable");
+          const inventory = await response.json();
+          status.textContent = inventory.length ? `${inventory.length} registered agents` : "No agents registered";
+          inventory.forEach(agent => {
+            const card = document.createElement("article");
+            const button = document.createElement("button");
+            button.append(element("h2", agent.display_name));
+            button.append(element("span", agent.lifecycle_state, "state"));
+            const details = document.createElement("dl");
+            [["Version", agent.latest_version], ["Owner", agent.owner], ["Risk", agent.risk_tier]].forEach(([label, value]) => {
+              details.append(element("dt", label), element("dd", value));
+            });
+            button.append(details); button.addEventListener("click", () => showHistory(agent));
+            card.append(button); agents.append(card);
+          });
+        } catch (error) { status.textContent = error.message; }
+      }
+      loadAgents();
+    </script>
+  </body>
+</html>
