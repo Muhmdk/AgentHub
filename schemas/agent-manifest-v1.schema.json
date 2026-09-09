@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenthub.dev/schemas/agent-manifest-v1.schema.json",
+  "title": "AgentHub Agent Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "metadata", "spec"],
+  "properties": {
+    "schema_version": {"const": "agenthub.dev/v1"},
+    "kind": {"const": "AgentManifest"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "display_name", "version", "owner", "risk_tier"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "minLength": 2, "maxLength": 63},
+        "display_name": {"type": "string", "minLength": 2, "maxLength": 100},
+        "version": {"type": "string", "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"},
+        "owner": {"type": "string", "minLength": 3, "maxLength": 200},
+        "risk_tier": {"enum": ["low", "medium", "high", "critical"]}
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "runtime", "prompt", "model"],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "commit_sha"],
+          "properties": {
+            "repository": {"type": "string", "minLength": 1, "maxLength": 500},
+            "commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entrypoint", "image"],
+          "properties": {
+            "entrypoint": {"type": "string", "minLength": 3, "maxLength": 300},
+            "image": {"type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$", "minLength": 72, "maxLength": 512}
+          }
+        },
+        "prompt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["prompt_id", "version"],
+          "properties": {
+            "prompt_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "minLength": 2, "maxLength": 63},
+            "version": {"type": "string", "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"}
+          }
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "name"],
+          "properties": {
+            "provider": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "minLength": 2, "maxLength": 63},
+            "name": {"type": "string", "minLength": 1, "maxLength": 200},
+            "parameters": {"type": "object", "default": {}}
+          }
+        },
+        "tools": {
+          "type": "array",
+          "maxItems": 50,
+          "default": [],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1, "maxLength": 100},
+              "scopes": {"type": "array", "maxItems": 50, "default": [], "items": {"type": "string"}}
+            }
+          }
+        },
+        "retrieval": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["corpus_id", "corpus_version"],
+          "properties": {
+            "corpus_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", "minLength": 2, "maxLength": 63},
+            "corpus_version": {"type": "string", "minLength": 1, "maxLength": 100},
+            "top_k": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5}
+          }
+        }
+      }
+    }
+  }
+}

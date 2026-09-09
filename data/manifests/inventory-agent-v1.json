@@ -1,0 +1,29 @@
+{
+  "schema_version": "agenthub.dev/v1",
+  "kind": "AgentManifest",
+  "metadata": {
+    "name": "inventory-agent",
+    "display_name": "Inventory Agent",
+    "version": "1.0.0",
+    "owner": "retail-ai-team",
+    "risk_tier": "medium"
+  },
+  "spec": {
+    "source": {
+      "repository": "https://github.com/Muhmdk/AgentHub",
+      "commit_sha": "a88fb630a9e5aa377feee41fbb542be66ddba2ac"
+    },
+    "runtime": {
+      "entrypoint": "agents.inventory:InventoryAgent",
+      "image": "ghcr.io/muhmdk/agenthub/inventory@sha256:f14c67b508a818d341d3b0b613a288c99e328ee1eceeb77647833395d4c8298f"
+    },
+    "prompt": {"prompt_id": "inventory-risk", "version": "1.0.0"},
+    "model": {"provider": "fake", "name": "deterministic-v1", "parameters": {"temperature": 0}},
+    "tools": [
+      {"name": "inventory.read", "scopes": ["inventory:read"]},
+      {"name": "sales.read", "scopes": ["sales:read"]},
+      {"name": "promotions.read", "scopes": ["promotions:read"]},
+      {"name": "weather.read", "scopes": ["weather:read"]}
+    ]
+  }
+}

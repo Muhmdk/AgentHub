@@ -24,11 +24,13 @@ dependencies = [
 dev = [
   "detect-secrets>=1.5,<2",
   "httpx2>=2.12,<3",
+  "jsonschema>=4.25,<5",
   "mypy>=1.14,<2",
   "pip-audit>=2.8,<3",
   "pytest>=8.3,<10",
   "pytest-cov>=6,<8",
   "ruff>=0.9,<1",
+  "types-jsonschema>=4.25,<5",
 ]
 
 [tool.setuptools.packages.find]
