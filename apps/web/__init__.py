@@ -1,0 +1,8 @@
+"""Small operator-facing views composed by the AgentHub API."""
+
+from importlib.resources import files
+from pathlib import Path
+
+
+def registry_page_path() -> Path:
+    return Path(str(files("apps.web").joinpath("registry.html")))

@@ -36,6 +36,9 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["agents*", "apps*", "packages*"]
 
+[tool.setuptools.package-data]
+"apps.web" = ["*.html"]
+
 [tool.ruff]
 target-version = "py314"
 line-length = 100

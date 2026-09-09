@@ -11,6 +11,7 @@ from starlette.responses import Response
 
 from packages.contracts.errors import ErrorEnvelope, ErrorPayload, ValidationIssue
 from packages.contracts.runtime import AgentErrorCode, AgentExecutionError
+from packages.registry.repository import RegistryConflictError, RegistryNotFoundError
 
 logger = logging.getLogger("agenthub.api.errors")
 
@@ -101,10 +102,38 @@ async def agent_exception_handler(request: Request, exc: Exception) -> Response:
     )
 
 
+async def registry_not_found_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, RegistryNotFoundError):  # pragma: no cover - framework contract
+        raise TypeError("Expected RegistryNotFoundError")
+    return _response(
+        404,
+        ErrorPayload(
+            code="registry_not_found",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
+async def registry_conflict_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, RegistryConflictError):  # pragma: no cover - framework contract
+        raise TypeError("Expected RegistryConflictError")
+    return _response(
+        409,
+        ErrorPayload(
+            code="registry_conflict",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register all public API exception contracts."""
     handlers: tuple[tuple[type[Exception], ExceptionHandler], ...] = (
         (AgentExecutionError, agent_exception_handler),
+        (RegistryNotFoundError, registry_not_found_handler),
+        (RegistryConflictError, registry_conflict_handler),
         (StarletteHTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),
