@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import timedelta
+from time import perf_counter
 from typing import TypedDict, cast
 
 from langgraph.errors import GraphRecursionError
@@ -31,6 +32,8 @@ from packages.contracts.runtime import (
     ToolExecutionError,
     ToolObservation,
 )
+from packages.observability import Telemetry, noop_telemetry
+from packages.observability.conventions import Attribute
 
 
 class InventoryState(TypedDict, total=False):
@@ -60,6 +63,7 @@ class InventoryAgent:
         max_steps: int = 3,
         tool_timeout_seconds: float = 1.0,
         execution_timeout_seconds: float = 5.0,
+        telemetry: Telemetry | None = None,
     ) -> None:
         if max_steps < 1 or tool_timeout_seconds <= 0 or execution_timeout_seconds <= 0:
             raise ValueError("Agent execution limits must be positive")
@@ -69,6 +73,7 @@ class InventoryAgent:
         self._max_steps = max_steps
         self._tool_timeout_seconds = tool_timeout_seconds
         self._execution_timeout_seconds = execution_timeout_seconds
+        self._telemetry = telemetry or noop_telemetry()
         self._graph = self._build_graph()
 
     def _build_graph(self) -> InventoryGraph:
@@ -84,6 +89,31 @@ class InventoryAgent:
 
     async def invoke(self, request: AgentRequest) -> AgentResponse:
         """Run the graph within the configured total execution deadline."""
+        attributes = {
+            Attribute.AGENT_NAME: "inventory-agent",
+            Attribute.AGENT_VERSION: "1.0.0",
+            Attribute.PROMPT_VERSION: "1.0.0",
+            Attribute.MODEL_PROVIDER: self._model.name.split("/", 1)[0],
+            Attribute.MODEL_DEPLOYMENT: self._model.name,
+        }
+        started = perf_counter()
+        success = False
+        try:
+            with (
+                self._telemetry.span("agent.invoke", attributes),
+                self._telemetry.span("agent.graph", attributes),
+            ):
+                response = await self._invoke_graph(request)
+            success = True
+            return response
+        finally:
+            self._telemetry.record_agent(
+                attributes,
+                (perf_counter() - started) * 1000,
+                success=success,
+            )
+
+    async def _invoke_graph(self, request: AgentRequest) -> AgentResponse:
         try:
             result = cast(
                 InventoryState,
@@ -177,17 +207,33 @@ class InventoryAgent:
                     AgentErrorCode.TOOL_ERROR,
                     "Inventory Agent requested an undeclared tool",
                 )
+            attributes = {
+                Attribute.AGENT_NAME: "inventory-agent",
+                Attribute.AGENT_VERSION: "1.0.0",
+                Attribute.TOOL_NAME: call.name,
+            }
+            started = perf_counter()
+            success = False
             try:
-                observation = await asyncio.wait_for(
-                    tool.invoke(call.arguments), timeout=self._tool_timeout_seconds
+                with self._telemetry.span("tool.invoke", attributes):
+                    try:
+                        observation = await asyncio.wait_for(
+                            tool.invoke(call.arguments), timeout=self._tool_timeout_seconds
+                        )
+                    except TimeoutError:
+                        raise AgentExecutionError(
+                            AgentErrorCode.TOOL_TIMEOUT,
+                            f"{call.name} timed out",
+                        ) from None
+                    except ToolExecutionError as exc:
+                        raise AgentExecutionError(AgentErrorCode.TOOL_ERROR, exc.message) from None
+                success = True
+            finally:
+                self._telemetry.record_tool(
+                    attributes,
+                    (perf_counter() - started) * 1000,
+                    success=success,
                 )
-            except TimeoutError:
-                raise AgentExecutionError(
-                    AgentErrorCode.TOOL_TIMEOUT,
-                    f"{call.name} timed out",
-                ) from None
-            except ToolExecutionError as exc:
-                raise AgentExecutionError(AgentErrorCode.TOOL_ERROR, exc.message) from None
 
             observations[call.name] = observation
             citations.extend(observation.citations)
@@ -228,13 +274,27 @@ class InventoryAgent:
             max_tokens=800,
             seed=state["request"].seed,
         )
+        attributes = {
+            Attribute.AGENT_NAME: "inventory-agent",
+            Attribute.AGENT_VERSION: "1.0.0",
+            Attribute.PROMPT_VERSION: "1.0.0",
+            Attribute.MODEL_PROVIDER: self._model.name.split("/", 1)[0],
+            Attribute.MODEL_DEPLOYMENT: self._model.name,
+        }
         try:
-            model_response = await self._model.generate(request)
+            with self._telemetry.span("model.generate", attributes):
+                model_response = await self._model.generate(request)
         except Exception as exc:
             raise AgentExecutionError(
                 AgentErrorCode.MODEL_ERROR,
                 "Inventory Agent model generation failed",
             ) from exc
+        self._telemetry.record_model(
+            attributes,
+            input_tokens=model_response.usage.input_tokens,
+            output_tokens=model_response.usage.output_tokens,
+            cost_usd=model_response.usage.estimated_cost_usd,
+        )
 
         response = AgentResponse(
             answer=model_response.content,

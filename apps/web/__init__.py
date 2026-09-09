@@ -10,3 +10,7 @@ def registry_page_path() -> Path:
 
 def evaluation_page_path() -> Path:
     return Path(str(files("apps.web").joinpath("evaluations.html")))
+
+
+def observability_page_path() -> Path:
+    return Path(str(files("apps.web").joinpath("observability.html")))

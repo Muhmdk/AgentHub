@@ -1,0 +1,33 @@
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'agenthub_agent_requests_total{agent_name="inventory-agent"}'
+        values: '0+60x370'
+      - series: 'agenthub_agent_errors_total{agent_name="inventory-agent"}'
+        values: '0+12x370'
+    alert_rule_test:
+      - eval_time: 6h10m
+        alertname: AgentHubAvailabilityFastBurn
+        exp_alerts:
+          - exp_labels:
+              agent_name: inventory-agent
+              severity: critical
+              slo: availability
+            exp_annotations:
+              summary: "inventory-agent is exhausting its availability budget"
+              runbook_url: "/docs/runbooks/slo-burn-rate.md"
+      - eval_time: 6h10m
+        alertname: AgentHubAvailabilitySlowBurn
+        exp_alerts:
+          - exp_labels:
+              agent_name: inventory-agent
+              severity: warning
+              slo: availability
+            exp_annotations:
+              summary: "inventory-agent has sustained availability budget burn"
+              runbook_url: "/docs/runbooks/slo-burn-rate.md"

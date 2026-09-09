@@ -3,7 +3,7 @@ VENV := .venv
 BIN := $(VENV)/bin
 UV_VERSION := 0.12.11
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security up migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -45,6 +45,12 @@ security:
 
 up:
 	docker compose up --detach --wait postgres
+
+observability-up:
+	docker compose up --detach postgres tempo otel-collector prometheus grafana
+
+observability-down:
+	docker compose stop grafana prometheus otel-collector tempo
 
 migrate:
 	$(BIN)/alembic upgrade head

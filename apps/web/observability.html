@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AgentHub Observability</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #080d18;
+        color: #edf4ff;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 12% 0%, #142b42 0, #080d18 38%); }
+      main { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 52px 0 72px; }
+      header { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 38px; }
+      .eyebrow { margin: 0 0 10px; color: #67e8f9; font: 700 .75rem/1 ui-monospace, monospace; letter-spacing: .18em; }
+      h1 { margin: 0; font-size: clamp(2.4rem, 6vw, 5.2rem); line-height: .95; letter-spacing: -.065em; }
+      .lede { max-width: 410px; margin: 0; color: #9fb0ca; line-height: 1.6; }
+      #status { min-height: 24px; color: #9fb0ca; }
+      .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 22px 0; }
+      .summary div, article { border: 1px solid #273851; background: rgba(14, 24, 40, .86); box-shadow: 0 18px 60px rgba(0, 0, 0, .22); }
+      .summary div { padding: 18px 20px; border-radius: 12px; }
+      .summary span { display: block; color: #93a4bd; font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; }
+      .summary strong { display: block; margin-top: 8px; font-size: 1.5rem; }
+      #agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 16px; }
+      article { padding: 22px; border-radius: 16px; }
+      article.alert { border-color: #fb7185; }
+      .agent-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+      h2 { margin: 0; font-size: 1.16rem; }
+      .version { color: #93a4bd; font: .75rem ui-monospace, monospace; }
+      dl { display: grid; grid-template-columns: 1fr auto; gap: 10px 18px; margin: 22px 0; }
+      dt { color: #93a4bd; } dd { margin: 0; font-variant-numeric: tabular-nums; }
+      .slo { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 11px 0; border-top: 1px solid #25344b; }
+      .slo span:last-child { color: #a5f3fc; font-variant-numeric: tabular-nums; }
+      .severity { color: #fecdd3 !important; font-weight: 700; text-transform: uppercase; }
+      a { color: #67e8f9; text-underline-offset: 4px; }
+      .empty { color: #71839c; }
+      @media (max-width: 700px) { header { display: block; } .lede { margin-top: 20px; } .summary { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div><p class="eyebrow">AGENTHUB / OPERATIONS</p><h1>Fleet health</h1></div>
+        <p class="lede">Live service-level signals from bounded telemetry. Follow a trace when a request needs deeper investigation.</p>
+      </header>
+      <p id="status" role="status">Loading fleet observations…</p>
+      <section class="summary" aria-label="Fleet summary">
+        <div><span>Agents</span><strong id="agent-count">—</strong></div>
+        <div><span>Active alerts</span><strong id="alert-count">—</strong></div>
+        <div><span>SLO profile</span><strong id="profile">—</strong></div>
+      </section>
+      <section id="agents" aria-label="Agent health"></section>
+    </main>
+    <script>
+      const status = document.querySelector("#status");
+      const agentsNode = document.querySelector("#agents");
+      const formatPercent = value => value == null ? "No data" : `${(value * 100).toFixed(1)}%`;
+      const formatNumber = (value, suffix = "") => value == null ? "No data" : `${value.toFixed(2)}${suffix}`;
+
+      function textElement(name, value, className) {
+        const node = document.createElement(name);
+        node.textContent = value;
+        if (className) node.className = className;
+        return node;
+      }
+
+      function traceLink(traceId) {
+        if (!traceId) return textElement("span", "No trace yet", "empty");
+        const link = document.createElement("a");
+        const query = { datasource: "Tempo", queries: [{ query: traceId, queryType: "traceql" }], range: { from: "now-1h", to: "now" } };
+        link.href = `http://127.0.0.1:3000/explore?left=${encodeURIComponent(JSON.stringify(query))}`;
+        link.textContent = `Trace ${traceId.slice(0, 10)}…`;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        return link;
+      }
+
+      function renderAgent(agent) {
+        const alerting = agent.slos.some(slo => slo.alert_severity);
+        const card = document.createElement("article");
+        if (alerting) card.className = "alert";
+        const head = textElement("div", "", "agent-head");
+        head.append(textElement("h2", agent.agent_name), textElement("span", `v${agent.agent_version}`, "version"));
+        card.append(head);
+        const details = document.createElement("dl");
+        [
+          ["Requests", String(agent.request_count)],
+          ["Availability", formatPercent(agent.availability)],
+          ["p95 latency", formatNumber(agent.p95_latency_ms, " ms")],
+          ["Tool success", formatPercent(agent.tool_success)],
+          ["Groundedness", formatPercent(agent.groundedness)],
+          ["Evaluation pass", formatPercent(agent.evaluation_pass_rate)],
+          ["Mean cost", agent.mean_cost_usd == null ? "No data" : `$${agent.mean_cost_usd.toFixed(4)}`],
+        ].forEach(([label, value]) => details.append(textElement("dt", label), textElement("dd", value)));
+        card.append(details, traceLink(agent.last_trace_id));
+        agent.slos.forEach(slo => {
+          const row = textElement("div", "", "slo");
+          row.append(textElement("span", slo.objective_id));
+          const value = slo.alert_severity || formatPercent(slo.compliance);
+          row.append(textElement("span", value, slo.alert_severity ? "severity" : ""));
+          card.append(row);
+        });
+        return card;
+      }
+
+      async function loadFleet() {
+        try {
+          const response = await fetch("/observability/fleet");
+          if (!response.ok) throw new Error("Observability API is unavailable");
+          const fleet = await response.json();
+          const alerts = fleet.agents.flatMap(agent => agent.slos).filter(slo => slo.alert_severity).length;
+          document.querySelector("#agent-count").textContent = fleet.agents.length;
+          document.querySelector("#alert-count").textContent = alerts;
+          document.querySelector("#profile").textContent = `${fleet.profile_id} v${fleet.profile_version}`;
+          status.textContent = `Updated ${new Date(fleet.generated_at).toLocaleString()}`;
+          fleet.agents.forEach(agent => agentsNode.append(renderAgent(agent)));
+        } catch (error) { status.textContent = error.message; }
+      }
+      loadFleet();
+    </script>
+  </body>
+</html>
