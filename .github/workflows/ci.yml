@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   quality:
-    name: Phase 00 quality
+    name: Quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
