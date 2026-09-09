@@ -46,8 +46,8 @@ databases, provider credentials, or cloud state.
 
 ## Pull requests
 
-Phase 00 uses the title `Phase 00: Establish AgentHub foundation`. Keep the PR description
-current and include:
+Use the exact branch and pull-request title assigned to the active phase in
+`AGENTHUB_PLAN.md`. Keep the PR description current and include:
 
 - the phase objective and completed scope;
 - exact verification commands and results;

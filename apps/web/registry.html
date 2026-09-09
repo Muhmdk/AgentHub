@@ -57,7 +57,7 @@
         const heading = element("h2", `${agent.display_name} versions`);
         const table = document.createElement("table");
         const head = document.createElement("tr");
-        ["Version", "State", "Owner", "Manifest hash"].forEach(label => head.append(element("th", label)));
+        ["Version", "Environment state", "Owner", "Manifest hash"].forEach(label => head.append(element("th", label)));
         const thead = document.createElement("thead"); thead.append(head); table.append(thead);
         const tbody = document.createElement("tbody");
         versions.forEach(version => {
