@@ -11,6 +11,8 @@ from starlette.responses import Response
 
 from packages.contracts.errors import ErrorEnvelope, ErrorPayload, ValidationIssue
 from packages.contracts.runtime import AgentErrorCode, AgentExecutionError
+from packages.evaluation.repository import EvaluationConflictError, EvaluationNotFoundError
+from packages.evaluation.service import EvaluationTargetNotFoundError
 from packages.registry.repository import RegistryConflictError, RegistryNotFoundError
 
 logger = logging.getLogger("agenthub.api.errors")
@@ -128,12 +130,54 @@ async def registry_conflict_handler(request: Request, exc: Exception) -> Respons
     )
 
 
+async def evaluation_not_found_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, EvaluationNotFoundError):  # pragma: no cover
+        raise TypeError("Expected EvaluationNotFoundError")
+    return _response(
+        404,
+        ErrorPayload(
+            code="evaluation_not_found",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
+async def evaluation_conflict_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, EvaluationConflictError):  # pragma: no cover
+        raise TypeError("Expected EvaluationConflictError")
+    return _response(
+        409,
+        ErrorPayload(
+            code="evaluation_conflict",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
+async def evaluation_target_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, EvaluationTargetNotFoundError):  # pragma: no cover
+        raise TypeError("Expected EvaluationTargetNotFoundError")
+    return _response(
+        422,
+        ErrorPayload(
+            code="evaluation_target_unavailable",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register all public API exception contracts."""
     handlers: tuple[tuple[type[Exception], ExceptionHandler], ...] = (
         (AgentExecutionError, agent_exception_handler),
         (RegistryNotFoundError, registry_not_found_handler),
         (RegistryConflictError, registry_conflict_handler),
+        (EvaluationNotFoundError, evaluation_not_found_handler),
+        (EvaluationConflictError, evaluation_conflict_handler),
+        (EvaluationTargetNotFoundError, evaluation_target_handler),
         (StarletteHTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),
