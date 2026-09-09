@@ -2,6 +2,7 @@
 
 import asyncio
 
+from agents.shared.content_safety import contains_embedded_instruction
 from agents.shared.model import ChatModel, DeterministicFakeModel
 from agents.shared.retrieval import Retriever
 from packages.contracts.retrieval import (
@@ -18,15 +19,6 @@ from packages.contracts.runtime import (
     Citation,
     ModelRequest,
     ModelResponse,
-)
-
-_INJECTION_MARKERS = (
-    "ignore previous",
-    "ignore all instructions",
-    "system prompt",
-    "developer message",
-    "call the tool",
-    "override policy",
 )
 
 
@@ -106,8 +98,7 @@ class KnowledgeAgent:
         for result in results:
             if result.score < self._minimum_score:
                 continue
-            normalized = result.chunk.content.casefold()
-            if any(marker in normalized for marker in _INJECTION_MARKERS):
+            if contains_embedded_instruction(result.chunk.content):
                 continue
             return result
         return None
