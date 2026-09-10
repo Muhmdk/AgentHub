@@ -47,6 +47,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}
 
+{{- define "agenthub.migrationServiceAccountName" -}}
+{{- if .Values.migrations.serviceAccount.create }}
+{{- .Values.migrations.serviceAccount.name }}
+{{- else }}
+{{- required "migrations.serviceAccount.name is required when creation is disabled" .Values.migrations.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
 {{- define "agenthub.image" -}}
 {{- if .Values.image.digest }}
 {{- printf "%s@%s" .Values.image.repository .Values.image.digest }}

@@ -25,12 +25,27 @@ helm upgrade --install agenthub deploy/helm/agenthub \
   --set-string image.repository="<registry>.azurecr.io/agenthub" \
   --set-string image.digest="sha256:<64-hex-digest>" \
   --set-string runtime.azureManagedIdentityClientId="<client-id>" \
+  --set-string runtime.azureDatabaseBootstrapIdentityClientId="<bootstrap-client-id>" \
   --set-string runtime.azureOpenAIEndpoint="https://<account>.openai.azure.com" \
   --set-string runtime.azureOpenAIDeployment="<deployment>" \
   --set-string runtime.azureSearchEndpoint="https://<service>.search.windows.net" \
-  --set-string runtime.azureSearchIndexName="agenthub-chunks-v1"
+  --set-string runtime.azureSearchIndexName="agenthub-chunks-v1" \
+  --set-string keyVault.name="<vault-name>" \
+  --set-string keyVault.tenantId="<tenant-id>"
 ```
 
-Dev does not render credential values. The referenced Secret is a temporary compatibility
-boundary for the database URL; the hardened AKS profile replaces secret material delivery with
-the Key Vault CSI/workload identity integration in the next chart checkpoint.
+Dev does not render credential values. The Secrets Store CSI driver mounts the selected Key Vault
+objects and syncs the database URL to the `agenthub-runtime` Secret consumed by the API and
+migration job. The application and migration job use separate annotated service accounts matching
+the Terraform workload identity subjects.
+
+The default security profile runs both containers as UID/GID 65532 with a read-only root
+filesystem, all Linux capabilities dropped, `RuntimeDefault` seccomp, bounded `/tmp` storage,
+requests and limits, and startup/liveness/readiness probes. The default-deny NetworkPolicy permits
+only same-namespace ingress, DNS, HTTPS provider calls, OTLP in the namespace, and PostgreSQL on
+the configured CIDRs.
+
+The dev HPA scales from one to at most two replicas at 70% requested CPU, adds only one pod per
+minute, and waits five minutes before scaling down. PDB creation stays disabled for the single-node
+dev cluster because a one-replica PDB would block voluntary maintenance without providing
+availability. Enable it only after adding another node and maintaining at least two replicas.

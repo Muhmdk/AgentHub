@@ -14,6 +14,7 @@ imagePullSecrets: []
 serviceAccount:
   create: true
   name: ""
+  automountToken: false
   annotations: {}
   labels: {}
 
@@ -35,6 +36,7 @@ runtime:
   retrievalTimeoutSeconds: 5.0
   azureRequestTimeoutSeconds: 10.0
   azureManagedIdentityClientId: ""
+  azureDatabaseBootstrapIdentityClientId: ""
   azureOpenAIEndpoint: ""
   azureOpenAIDeployment: ""
   azureSearchEndpoint: ""
@@ -51,6 +53,83 @@ database:
 migrations:
   enabled: true
   backoffLimit: 3
+  serviceAccount:
+    create: true
+    name: agenthub-database-bootstrap
+    automountToken: false
+    annotations: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  startup:
+    failureThreshold: 30
+    periodSeconds: 2
+  liveness:
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+
+networkPolicy:
+  enabled: true
+  postgresCidrs:
+    - 0.0.0.0/0
+
+keyVault:
+  enabled: false
+  name: ""
+  tenantId: ""
+  objects: []
+  secretObjects: []
+  mountPath: /mnt/secrets-store
+
+terminationGracePeriodSeconds: 30
+revisionHistoryLimit: 3
 
 podAnnotations: {}
 podLabels: {}

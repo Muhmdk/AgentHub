@@ -9,3 +9,13 @@ database:
 
 migrations:
   enabled: true
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+networkPolicy:
+  postgresCidrs:
+    - 0.0.0.0/0
