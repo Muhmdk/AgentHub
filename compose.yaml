@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     environment:
       POSTGRES_DB: agenthub
       POSTGRES_USER: agenthub
@@ -16,7 +16,7 @@ services:
       - agenthub-postgres:/var/lib/postgresql/data
 
   tempo:
-    image: grafana/tempo:2.10.5
+    image: grafana/tempo:2.10.5@sha256:ee21727732c7a7199cb71c3eee9153bbf23f9b0b87619f0555a0cf21a67f1a33
     command: ["-config.file=/etc/tempo.yaml"]
     ports:
       - "3200:3200"
@@ -25,7 +25,7 @@ services:
       - agenthub-tempo:/var/tempo
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.153.0
+    image: otel/opentelemetry-collector-contrib:0.153.0@sha256:93aad750175cbf1a973ae1c5886c3371f4d800f61be25cdd26870b8441ffe9fa
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     depends_on:
       - tempo
@@ -38,7 +38,7 @@ services:
       - ./infra/observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
 
   prometheus:
-    image: prom/prometheus:v3.5.0
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -54,7 +54,7 @@ services:
       - agenthub-prometheus:/prometheus
 
   grafana:
-    image: grafana/grafana:13.1.0
+    image: grafana/grafana:13.1.0@sha256:121a7a9ece6dc10b969f1f96eed64b4f07dfac0d0b8abc070f7cb83bbde86f63
     depends_on:
       - prometheus
       - tempo
