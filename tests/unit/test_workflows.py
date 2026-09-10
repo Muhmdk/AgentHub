@@ -79,6 +79,17 @@ def test_candidate_workflow_registers_evaluates_and_attaches_evidence() -> None:
 
 
 @pytest.mark.unit
+def test_infrastructure_workflow_validates_committed_observability_assets() -> None:
+    workflow = (WORKFLOWS / "infrastructure.yml").read_text(encoding="utf-8")
+
+    assert list((ROOT / "infra/observability/grafana/dashboards").glob("*.json"))
+    assert "infra/observability/grafana/dashboards/*.json" in workflow
+    assert "--entrypoint promtool prometheus" in workflow
+    assert "promtool check" not in workflow
+    assert "promtool test" not in workflow
+
+
+@pytest.mark.unit
 def test_release_uses_least_privilege_oidc_and_digest_only_promotion() -> None:
     release_path = WORKFLOWS / "release.yml"
     workflow = _load("release.yml")

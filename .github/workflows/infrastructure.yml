@@ -51,9 +51,9 @@ jobs:
             .venv/bin/python -m json.tool "$dashboard" >/dev/null
           done
           docker compose run --rm --no-deps --entrypoint promtool prometheus \
-            promtool check config /etc/prometheus/prometheus.yml
+            check config /etc/prometheus/prometheus.yml
           docker compose run --rm --no-deps --entrypoint promtool prometheus \
-            promtool test rules /etc/prometheus/alerts.test.yml
+            test rules /etc/prometheus/alerts.test.yml
       - name: Validate migrations from an empty database
         run: |
           make migrate
