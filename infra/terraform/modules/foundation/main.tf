@@ -131,3 +131,29 @@ resource "azurerm_user_assigned_identity" "workload" {
   location            = azurerm_resource_group.environment.location
   tags                = local.tags
 }
+
+resource "azurerm_user_assigned_identity" "aks_control_plane" {
+  name                = "id-aks-control-${local.base_name}"
+  resource_group_name = azurerm_resource_group.environment.name
+  location            = azurerm_resource_group.environment.location
+  tags                = local.tags
+}
+
+resource "azurerm_user_assigned_identity" "aks_kubelet" {
+  name                = "id-aks-kubelet-${local.base_name}"
+  resource_group_name = azurerm_resource_group.environment.name
+  location            = azurerm_resource_group.environment.location
+  tags                = local.tags
+}
+
+resource "azurerm_role_assignment" "aks_control_plane_network" {
+  scope                = azurerm_subnet.aks.id
+  role_definition_name = "Network Contributor"
+  principal_id         = azurerm_user_assigned_identity.aks_control_plane.principal_id
+}
+
+resource "azurerm_role_assignment" "aks_control_plane_kubelet_identity" {
+  scope                = azurerm_user_assigned_identity.aks_kubelet.id
+  role_definition_name = "Managed Identity Operator"
+  principal_id         = azurerm_user_assigned_identity.aks_control_plane.principal_id
+}

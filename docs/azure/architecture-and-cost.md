@@ -60,6 +60,9 @@ the application environment cannot destroy its own audit trail or lock.
   identity. No client secret, registry password, kubeconfig, or storage key is stored in GitHub.
 - AKS issues projected service-account tokens. A federated identity credential binds only the
   `agenthub` namespace and `agenthub` service account to the workload identity.
+- PostgreSQL disables password authentication. A separate federated database-bootstrap identity
+  is the initial Entra administrator and creates the least-privilege application role; application
+  pods use their own managed-identity token for normal database access.
 - The workload identity receives data-plane roles only: read selected Key Vault secrets, query
   Search, and invoke the configured model. The kubelet identity receives ACR pull only.
 - The AKS API is public for the cost-conscious dev environment but restricted to explicit operator
@@ -145,6 +148,7 @@ deployment endpoint and name; it never assumes that a public model name is deplo
 - [Azure AI Search service limits](https://learn.microsoft.com/en-us/azure/search/search-limits-quotas-capacity)
 - [Try Azure AI Search for free](https://learn.microsoft.com/en-ca/azure/search/search-try-for-free)
 - [PostgreSQL Flexible Server backup and restore](https://learn.microsoft.com/en-us/azure/postgresql/backup-restore/concepts-backup-restore)
+- [PostgreSQL Flexible Server Microsoft Entra authentication](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-azure-ad-authentication)
 - [Azure OpenAI / Foundry quota](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/quota)
 - [Azure Monitor pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/)
 - [Azure Retail Prices API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices)
