@@ -31,6 +31,7 @@ dist/
 
 # Terraform local state and operator inputs
 **/.terraform/*
+infra/terraform/modules/**/.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 *.tfplan

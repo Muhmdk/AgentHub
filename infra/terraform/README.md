@@ -46,3 +46,17 @@ Review the human-readable plan, the policy result, and the refreshed cost estima
 operator runs `terraform apply dev.tfplan`. See
 [`docs/azure/architecture-and-cost.md`](../../../docs/azure/architecture-and-cost.md) for the
 approved inventory, threat boundary, and monthly ceiling.
+
+## Offline validation
+
+Install Terraform 1.16.2, Helm 4.2.4, and kubeconform 0.8.0, then run:
+
+```bash
+make infra-validate
+```
+
+The command validates both Terraform state roots, runs the mock-provider module plans, lints the
+chart and both values profiles, checks rendered built-in Kubernetes resources against their
+schemas, and enforces the dev security contract. The pull-request infrastructure workflow
+downloads those exact CLI versions with pinned SHA-256 checksums and runs the same targets. It
+does not authenticate to Azure, run a live plan, or apply resources.

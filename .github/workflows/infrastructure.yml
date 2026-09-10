@@ -6,6 +6,10 @@ on:
       - Dockerfile
       - compose.yaml
       - infra/**
+      - deploy/helm/**
+      - scripts/validate_kubernetes_security.py
+      - tests/fixtures/helm/**
+      - Makefile
       - migrations/**
       - .github/workflows/infrastructure.yml
   workflow_dispatch:
@@ -17,7 +21,7 @@ jobs:
   validate:
     name: Validate infrastructure
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub # pragma: allowlist secret
     services:
@@ -43,6 +47,42 @@ jobs:
           python-version: "3.14"
       - name: Install locked dependencies
         run: make setup
+      - name: Install checksum-verified infrastructure CLIs
+        env:
+          TERRAFORM_VERSION: 1.16.2
+          TERRAFORM_SHA256: 0d17011f0c4664539b164b044903d04e296c86c13cb9f28040076c65cfb3985a # pragma: allowlist secret
+          HELM_VERSION: 4.2.4
+          HELM_SHA256: c306b46f719b0a4da32d0f78ee21bf90ce8d602f15b22ab753f0674d1670a7f3 # pragma: allowlist secret
+          KUBECONFORM_VERSION: 0.8.0
+          KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883 # pragma: allowlist secret
+        run: |
+          install_dir="${RUNNER_TEMP}/agenthub-infra-bin"
+          mkdir -p "$install_dir"
+
+          curl --fail --silent --show-error --location \
+            --output "${RUNNER_TEMP}/terraform.zip" \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_SHA256}  ${RUNNER_TEMP}/terraform.zip" | sha256sum --check
+          unzip -q "${RUNNER_TEMP}/terraform.zip" -d "$install_dir"
+
+          curl --fail --silent --show-error --location \
+            --output "${RUNNER_TEMP}/helm.tar.gz" \
+            "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          echo "${HELM_SHA256}  ${RUNNER_TEMP}/helm.tar.gz" | sha256sum --check
+          tar -xzf "${RUNNER_TEMP}/helm.tar.gz" -C "${RUNNER_TEMP}"
+          mv "${RUNNER_TEMP}/linux-amd64/helm" "$install_dir/helm"
+
+          curl --fail --silent --show-error --location \
+            --output "${RUNNER_TEMP}/kubeconform.tar.gz" \
+            "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  ${RUNNER_TEMP}/kubeconform.tar.gz" | sha256sum --check
+          tar -xzf "${RUNNER_TEMP}/kubeconform.tar.gz" -C "$install_dir" kubeconform
+
+          echo "$install_dir" >> "$GITHUB_PATH"
+      - name: Validate Terraform modules and environment
+        run: make infra-terraform
+      - name: Lint and validate Helm and Kubernetes manifests
+        run: make infra-helm
       - name: Validate Compose model
         run: docker compose config --quiet
       - name: Validate observability configuration

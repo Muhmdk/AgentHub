@@ -1,0 +1,15 @@
+image:
+  repository: example.azurecr.io/agenthub
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+runtime:
+  azureManagedIdentityClientId: 00000000-0000-0000-0000-000000000001
+  azureDatabaseBootstrapIdentityClientId: 00000000-0000-0000-0000-000000000002
+  azureOpenAIEndpoint: https://example.openai.azure.com
+  azureOpenAIDeployment: gpt-test
+  azureSearchEndpoint: https://example.search.windows.net
+  azureSearchIndexName: agenthub-chunks-v1
+
+keyVault:
+  name: kv-agenthub-ci
+  tenantId: 00000000-0000-0000-0000-000000000003
