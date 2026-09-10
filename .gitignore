@@ -28,3 +28,19 @@ htmlcov/
 # Build output
 build/
 dist/
+
+# Terraform local state and operator inputs
+**/.terraform/*
+infra/terraform/modules/**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+backend.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

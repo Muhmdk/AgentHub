@@ -12,6 +12,8 @@ license = "MIT"
 authors = [{ name = "Muhammad Khan" }]
 dependencies = [
   "alembic>=1.16,<2",
+  "azure-identity>=1.25.3,<2",
+  "azure-monitor-opentelemetry-exporter==1.0.0b57",
   "fastapi>=0.115,<1",
   "langgraph>=1.0,<2",
   "opentelemetry-api>=1.42,<2",
@@ -39,7 +41,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["agents*", "apps*", "packages*"]
+include = ["agents*", "apps*", "packages*", "scripts*"]
 
 [tool.setuptools.package-data]
 "apps.web" = ["*.html"]

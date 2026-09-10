@@ -8,7 +8,7 @@ from datetime import date
 
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
-from agents.shared.providers import create_chat_model
+from agents.shared.providers import create_provider_bundle
 from apps.api.config import load_settings
 from packages.contracts.runtime import AgentExecutionError, AgentRequest
 
@@ -27,9 +27,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
     """Run one inventory question and write a machine-readable response."""
     parsed = build_parser().parse_args(arguments)
     settings = load_settings()
+    providers = create_provider_bundle(settings)
     agent = InventoryAgent(
         data=RetailData.load(),
-        model=create_chat_model(settings.model_provider),
+        model=providers.model,
         max_steps=settings.agent_max_steps,
         tool_timeout_seconds=settings.tool_timeout_seconds,
         execution_timeout_seconds=settings.agent_timeout_seconds,
@@ -41,6 +42,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
     except AgentExecutionError as exc:
         print(f"{exc.code.value}: {exc.message}", file=sys.stderr)
         return 2
+    finally:
+        providers.close()
 
     print(response.model_dump_json(indent=2))
     return 0

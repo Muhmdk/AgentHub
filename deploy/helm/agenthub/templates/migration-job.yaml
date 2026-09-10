@@ -1,0 +1,71 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agenthub.fullname" . }}-migrate
+  labels:
+    {{- include "agenthub.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "agenthub.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+        {{- if .Values.runtime.azureDatabaseBootstrapIdentityClientId }}
+        azure.workload.identity/use: "true"
+        {{- end }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "agenthub.migrationServiceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.migrations.serviceAccount.automountToken }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "agenthub.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          {{- if .Values.migrations.azurePrincipalBootstrap }}
+          command: ["/app/.venv/bin/python", "-m", "packages.registry.azure_bootstrap"]
+          {{- else }}
+          command: ["/app/.venv/bin/python", "-m", "alembic", "upgrade", "head"]
+          {{- end }}
+          env:
+            - name: AGENTHUB_DATABASE_URL
+              value: {{ default .Values.database.url .Values.migrations.databaseUrl | required "migrations.databaseUrl or database.url is required when migrations are enabled" | quote }}
+            - name: AGENTHUB_DATABASE_AUTH_MODE
+              value: {{ .Values.database.authMode | quote }}
+            - name: AGENTHUB_AZURE_POSTGRES_TOKEN_SCOPE
+              value: {{ .Values.database.azureTokenScope | quote }}
+            {{- if .Values.migrations.azurePrincipalBootstrap }}
+            - name: AGENTHUB_AZURE_MANAGED_IDENTITY_CLIENT_ID
+              value: {{ required "runtime.azureDatabaseBootstrapIdentityClientId is required for Azure principal bootstrap" .Values.runtime.azureDatabaseBootstrapIdentityClientId | quote }}
+            - name: AGENTHUB_DATABASE_APP_PRINCIPAL_NAME
+              value: {{ required "migrations.appPrincipalName is required for Azure principal bootstrap" .Values.migrations.appPrincipalName | quote }}
+            - name: AGENTHUB_DATABASE_APP_PRINCIPAL_OBJECT_ID
+              value: {{ required "migrations.appPrincipalObjectId is required for Azure principal bootstrap" .Values.migrations.appPrincipalObjectId | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+{{- end }}

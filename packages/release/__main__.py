@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
+from agents.shared.providers import create_database, create_provider_bundle
 from apps.api.config import load_settings
 from packages.contracts.evaluation import EvaluationRunReport, RunEvaluationRequest
 from packages.contracts.release import (
@@ -234,7 +235,8 @@ async def simulate(
 def main(argv: list[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     settings = load_settings()
-    database = Database(settings.database_url)
+    providers = create_provider_bundle(settings)
+    database = create_database(settings, providers)
     try:
         if arguments.command == "candidate":
             payload, status = create_candidate(arguments, database)
@@ -247,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     finally:
         database.dispose()
+        providers.close()
     print(json.dumps(payload, indent=2))
     return status
 

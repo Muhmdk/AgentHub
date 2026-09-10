@@ -2,10 +2,16 @@
 
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from agents.shared.azure import (
+    AZURE_OPENAI_SCOPE,
+    AZURE_SEARCH_API_VERSION,
+    AZURE_SEARCH_SCOPE,
+)
 
 
 def installed_version() -> str:
@@ -31,7 +37,24 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     api_host: str = Field(default="127.0.0.1", min_length=1)
     api_port: int = Field(default=8000, ge=1, le=65535)
-    model_provider: Literal["fake"] = "fake"
+    model_provider: Literal["fake", "azure-openai"] = "fake"
+    retrieval_provider: Literal["local", "azure-search"] = "local"
+    azure_managed_identity_client_id: str | None = None
+    azure_openai_endpoint: str | None = None
+    azure_openai_deployment: str | None = None
+    azure_openai_token_scope: str = Field(default=AZURE_OPENAI_SCOPE, min_length=1)
+    azure_openai_input_cost_per_million: float = Field(default=0.0, ge=0.0)
+    azure_openai_output_cost_per_million: float = Field(default=0.0, ge=0.0)
+    azure_search_endpoint: str | None = None
+    azure_search_index_name: str | None = None
+    azure_search_api_version: str = Field(default=AZURE_SEARCH_API_VERSION, min_length=1)
+    azure_search_token_scope: str = Field(default=AZURE_SEARCH_SCOPE, min_length=1)
+    azure_request_timeout_seconds: float = Field(default=10.0, gt=0.0, le=120.0)
+    database_auth_mode: Literal["password", "azure-workload-identity"] = "password"
+    azure_postgres_token_scope: str = Field(
+        default="https://ossrdbms-aad.database.windows.net/.default",
+        min_length=1,
+    )
     agent_max_steps: int = Field(default=3, ge=1, le=20)
     tool_timeout_seconds: float = Field(default=1.0, gt=0.0, le=30.0)
     agent_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
@@ -39,7 +62,9 @@ class Settings(BaseSettings):
     rag_minimum_score: float = Field(default=0.15, ge=0.0, le=1.0)
     retrieval_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
     otel_enabled: bool = False
+    otel_exporter: Literal["otlp", "azure-monitor"] = "otlp"
     otel_endpoint: str = Field(default="http://127.0.0.1:4318", min_length=1, max_length=500)
+    azure_monitor_connection_string: str | None = None
     otel_export_interval_ms: int = Field(default=5000, ge=100, le=60000)
     otel_max_queue_size: int = Field(default=256, ge=64, le=4096)
     observability_grafana_url: str = Field(
@@ -52,6 +77,30 @@ class Settings(BaseSettings):
         min_length=1,
     )
     version: str = Field(default_factory=installed_version, min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_selected_providers(self) -> Self:
+        """Require Azure coordinates only when a network provider is selected."""
+        if self.model_provider == "azure-openai" and (
+            not self.azure_openai_endpoint or not self.azure_openai_deployment
+        ):
+            raise ValueError("Azure OpenAI endpoint and deployment are required")
+        if self.retrieval_provider == "azure-search" and (
+            not self.azure_search_endpoint or not self.azure_search_index_name
+        ):
+            raise ValueError("Azure Search endpoint and index name are required")
+        if (
+            self.database_auth_mode == "azure-workload-identity"
+            and not self.database_url.startswith("postgresql+psycopg://")
+        ):
+            raise ValueError("Azure PostgreSQL requires a psycopg SQLAlchemy URL")
+        if (
+            self.otel_enabled
+            and self.otel_exporter == "azure-monitor"
+            and not self.azure_monitor_connection_string
+        ):
+            raise ValueError("Azure Monitor connection string is required")
+        return self
 
 
 class ConfigurationError(RuntimeError):

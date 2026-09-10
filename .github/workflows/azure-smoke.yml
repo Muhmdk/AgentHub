@@ -1,0 +1,47 @@
+name: Azure Post-Deploy Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Reachable HTTPS AgentHub gateway origin
+        type: string
+        required: true
+      expected_model_prefix:
+        description: Required model identifier prefix
+        type: string
+        default: azure-openai/
+        required: true
+
+concurrency:
+  group: azure-smoke-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify deployed AgentHub
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install locked dependencies
+        run: make setup
+      - name: Run bounded post-deploy verification
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          EXPECTED_MODEL_PREFIX: ${{ inputs.expected_model_prefix }}
+          AGENTHUB_SMOKE_BEARER_TOKEN: ${{ secrets.AGENTHUB_SMOKE_BEARER_TOKEN }}
+        run: |
+          .venv/bin/python scripts/smoke_deployment.py \
+            --base-url "$BASE_URL" \
+            --expected-model-prefix "$EXPECTED_MODEL_PREFIX" \
+            --environment azure-smoke

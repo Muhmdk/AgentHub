@@ -1,0 +1,12 @@
+apiVersion: v2
+name: agenthub
+description: AgentHub control plane, agent endpoints, and migration job
+type: application
+version: 0.1.0
+appVersion: "0.3.0"
+kubeVersion: ">=1.30.0-0"
+home: https://github.com/Muhmdk/AgentHub
+sources:
+  - https://github.com/Muhmdk/AgentHub
+maintainers:
+  - name: Muhammad Khan

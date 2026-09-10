@@ -1,0 +1,22 @@
+subscription_id       = "00000000-0000-0000-0000-000000000000"
+tenant_id             = "00000000-0000-0000-0000-000000000000"
+unique_suffix         = "0000"
+owner                 = "Muhammad Khan"
+github_repository     = "Muhmdk/AgentHub"
+github_environment    = "staging"
+monthly_cost_limit_usd = 200
+budget_contact_emails  = ["owner@example.com"]
+budget_start_date      = "2026-09-01T00:00:00Z"
+
+aks_admin_group_object_ids = [
+  "00000000-0000-0000-0000-000000000000",
+]
+aks_api_authorized_ip_ranges = ["203.0.113.10/32"]
+key_vault_operator_ip_rules  = ["203.0.113.10/32"]
+
+# Existing quota-approved account; Terraform grants the workload data-plane access when set.
+# azure_openai_resource_id = "/subscriptions/.../resourceGroups/.../providers/Microsoft.CognitiveServices/accounts/..."
+
+tags = {
+  cost-center = "personal-development"
+}

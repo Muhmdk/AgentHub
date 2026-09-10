@@ -13,8 +13,7 @@ from fastapi.responses import FileResponse
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
 from agents.knowledge.agent import KnowledgeAgent
-from agents.shared.corpus import create_retail_retriever
-from agents.shared.providers import create_chat_model
+from agents.shared.providers import create_database, create_provider_bundle
 from agents.shopping.agent import ShoppingAgent
 from agents.shopping.tools import ProductSearchTool
 from apps.api.config import Settings, load_settings
@@ -81,12 +80,16 @@ def create_app(
             service_version=app_settings.version,
             environment=app_settings.environment,
             enabled=app_settings.otel_enabled,
+            exporter=app_settings.otel_exporter,
             endpoint=app_settings.otel_endpoint,
+            azure_monitor_connection_string=app_settings.azure_monitor_connection_string,
+            azure_managed_identity_client_id=app_settings.azure_managed_identity_client_id,
             export_interval_ms=app_settings.otel_export_interval_ms,
             max_queue_size=app_settings.otel_max_queue_size,
         )
     )
-    model = create_chat_model(app_settings.model_provider)
+    providers = create_provider_bundle(app_settings)
+    model = providers.model
     inventory = inventory_agent or InventoryAgent(
         data=RetailData.load(),
         model=model,
@@ -95,7 +98,8 @@ def create_app(
         execution_timeout_seconds=app_settings.agent_timeout_seconds,
         telemetry=telemetry,
     )
-    retriever, corpus, _ = create_retail_retriever()
+    retriever = providers.retriever
+    corpus = providers.corpus
     knowledge = knowledge_agent or KnowledgeAgent(
         retriever=retriever,
         corpus=corpus,
@@ -115,7 +119,7 @@ def create_app(
     owns_registry_database = False
     if registry_store is None:
         if registry_database is None:
-            registry_database = Database(app_settings.database_url)
+            registry_database = create_database(app_settings, providers)
             owns_registry_database = True
         registry: RegistryStore = RegistryRepository(registry_database)
     else:
@@ -152,6 +156,7 @@ def create_app(
         try:
             yield
         finally:
+            providers.close()
             telemetry.shutdown()
             if owns_registry_database and registry_database is not None:
                 registry_database.dispose()

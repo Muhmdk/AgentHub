@@ -1,0 +1,21 @@
+runtime:
+  environment: local
+  modelProvider: fake
+  retrievalProvider: local
+  otelEnabled: false
+
+database:
+  createSecret: true
+
+migrations:
+  enabled: true
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+networkPolicy:
+  postgresCidrs:
+    - 0.0.0.0/0
