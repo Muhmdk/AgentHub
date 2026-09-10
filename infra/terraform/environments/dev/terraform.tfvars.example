@@ -1,0 +1,11 @@
+subscription_id       = "00000000-0000-0000-0000-000000000000"
+tenant_id             = "00000000-0000-0000-0000-000000000000"
+unique_suffix         = "0000"
+owner                 = "Muhammad Khan"
+github_repository     = "Muhmdk/AgentHub"
+github_environment    = "staging"
+monthly_cost_limit_usd = 200
+
+tags = {
+  cost-center = "personal-development"
+}
