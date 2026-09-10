@@ -47,11 +47,12 @@ jobs:
         run: docker compose config --quiet
       - name: Validate observability configuration
         run: |
-          .venv/bin/python -m json.tool \
-            infra/observability/grafana/dashboards/agenthub-overview.json >/dev/null
-          docker compose run --rm prometheus \
+          for dashboard in infra/observability/grafana/dashboards/*.json; do
+            .venv/bin/python -m json.tool "$dashboard" >/dev/null
+          done
+          docker compose run --rm --no-deps --entrypoint promtool prometheus \
             promtool check config /etc/prometheus/prometheus.yml
-          docker compose run --rm prometheus \
+          docker compose run --rm --no-deps --entrypoint promtool prometheus \
             promtool test rules /etc/prometheus/alerts.test.yml
       - name: Validate migrations from an empty database
         run: |
