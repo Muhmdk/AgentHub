@@ -75,6 +75,11 @@ run "plans_secure_development_platform" {
   }
 
   assert {
+    condition     = length(azurerm_role_assignment.operator_search_service) == 1 && length(azurerm_role_assignment.operator_search_data) == 1
+    error_message = "Approved operator groups must own Search schema and document bootstrap."
+  }
+
+  assert {
     condition     = azurerm_key_vault.environment.network_acls[0].default_action == "Deny"
     error_message = "Key Vault must deny unapproved networks by default."
   }

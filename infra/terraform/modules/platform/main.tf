@@ -266,9 +266,12 @@ resource "azurerm_search_service" "environment" {
   semantic_search_sku           = "free"
   local_authentication_enabled  = false
   public_network_access_enabled = true
-  allowed_ips                   = [azurerm_public_ip.aks_egress.ip_address]
-  network_rule_bypass_option    = "None"
-  tags                          = local.tags
+  allowed_ips = sort(tolist(setunion(
+    toset([azurerm_public_ip.aks_egress.ip_address]),
+    var.aks_api_authorized_ip_ranges,
+  )))
+  network_rule_bypass_option = "None"
+  tags                       = local.tags
 
   identity {
     type = "SystemAssigned"
@@ -293,6 +296,22 @@ resource "azurerm_role_assignment" "workload_search" {
   scope                = azurerm_search_service.environment.id
   role_definition_name = "Search Index Data Reader"
   principal_id         = var.workload_identity.principal_id
+}
+
+resource "azurerm_role_assignment" "operator_search_service" {
+  for_each = toset(var.aks_admin_group_object_ids)
+
+  scope                = azurerm_search_service.environment.id
+  role_definition_name = "Search Service Contributor"
+  principal_id         = each.value
+}
+
+resource "azurerm_role_assignment" "operator_search_data" {
+  for_each = toset(var.aks_admin_group_object_ids)
+
+  scope                = azurerm_search_service.environment.id
+  role_definition_name = "Search Index Data Contributor"
+  principal_id         = each.value
 }
 
 resource "azurerm_role_assignment" "workload_azure_openai" {
