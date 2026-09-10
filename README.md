@@ -7,8 +7,9 @@ is being delivered in twelve independently reviewable phases described in
 
 ## Current status
 
-Phases 00 through 05 provide the local development foundation, three bounded demonstration
-agents, an immutable registry, reproducible release evaluations, and an observability/SLO plane.
+Phases 00 through 06 provide the local development foundation, three bounded demonstration
+agents, an immutable registry, reproducible evaluations, an observability/SLO plane, and an
+immutable CI/CD release path.
 The repository currently includes:
 
 - FastAPI liveness, readiness, and version endpoints;
@@ -32,13 +33,17 @@ The repository currently includes:
 - bounded agent, tool, retrieval, model, evaluation, policy, token, and cost metrics;
 - versioned SLOs, error budgets, multi-window burn alerts, and incident runbooks;
 - a local Collector, Prometheus, Tempo, and provisioned Grafana dashboards;
+- immutable candidate provenance and an idempotent, guarded promotion state machine;
+- split PR, candidate-evaluation, release, and infrastructure workflows;
+- non-root reproducible images, digest publication, high/critical scan gates, SBOMs, and attestations;
+- protected staging and production approvals backed by short-lived GitHub OIDC identity;
 - synthetic store, SKU, inventory, sales, promotion, and weather evidence;
 - unit, contract, and process-level smoke tests;
 - linting, formatting, strict typing, coverage, secret scanning, and dependency auditing;
-- a least-privilege GitHub Actions CI workflow.
+- least-privilege, SHA-pinned GitHub Actions workflows.
 
-Governance, deployment automation, and incident operations are planned for later phases and are
-not represented as implemented here.
+Advanced policy-as-code, progressive delivery, and incident automation are planned for later
+phases and are not represented as implemented here.
 
 ## Prerequisites
 
@@ -109,7 +114,7 @@ Expected responses:
 ```json
 {"status":"ok","service":"agenthub-api"}
 {"status":"ready","service":"agenthub-api"}
-{"service":"agenthub-api","version":"0.2.0","environment":"local"}
+{"service":"agenthub-api","version":"0.3.0","environment":"local"}
 ```
 
 Stop the foreground server with `Ctrl-C`. Interactive API documentation is available at
@@ -140,6 +145,19 @@ Use `python -m packages.evaluation --help` to select another agent, emit JUnit, 
 stored baseline, or replay an existing run by UUID. The [evaluation guide](docs/evaluations.md)
 documents metrics, thresholds, artifacts, APIs, replay, and model-judge limits.
 
+Run the complete local candidate path with PostgreSQL running:
+
+```bash
+make simulate-release
+make simulate-release-bad  # intentionally exits 2 before approval
+```
+
+The passing path registers the manifest, evaluates the candidate, attaches deterministic
+security, policy, SBOM, and build evidence, then advances the same immutable release through
+`evaluated → approved → staged → production`. The blocked path persists its failed evidence but
+cannot leave `evaluated`. See the [release pipeline guide](docs/releases.md) and
+[failed-workflow recovery runbook](docs/runbooks/release-recovery.md).
+
 ## API contracts
 
 | Endpoint | Purpose | Success status |
@@ -161,6 +179,12 @@ documents metrics, thresholds, artifacts, APIs, replay, and model-judge limits.
 | `GET /evaluations/runs` | Lists evaluation summaries, optionally filtered by agent | `200` |
 | `GET /evaluations/runs/{run_id}` | Replays one immutable full report | `200` |
 | `GET /evaluations/runs/{run_id}/comparison` | Gets absolute and relative gate checks | `200` |
+| `POST /releases/candidates` | Idempotently creates a candidate with immutable evidence | `200` |
+| `GET /releases` | Lists releases, optionally filtered by agent | `200` |
+| `GET /releases/{release_id}` | Gets release state, gates, and provenance | `200` |
+| `POST /releases/{release_id}/transitions` | Applies one guarded, retry-safe promotion | `200` |
+| `GET /releases/{release_id}/events` | Lists append-only state events | `200` |
+| `GET /releases/{release_id}/notes` | Generates release notes from stored provenance | `200` |
 | `GET /observability/fleet` | Reports live fleet signals, SLOs, budgets, and burn rates | `200` |
 | `GET /observability/agents/{name}` | Reports one agent's observability detail | `200` |
 
@@ -246,6 +270,8 @@ submitted value is deliberately omitted so a mistaken secret cannot be echoed.
 | `make benchmark-rag` | Print the versioned known-answer retrieval report |
 | `make evaluate` | Evaluate the Inventory Agent and emit an immutable JSON report |
 | `make evaluate-bad` | Prove a known-bad candidate is blocked with metric-level reasons |
+| `make simulate-release` | Run the passing candidate-to-production path locally |
+| `make simulate-release-bad` | Prove a regressed candidate cannot be promoted |
 | `make down` | Stop the local PostgreSQL container without deleting its volume |
 
 Run `make lock` after deliberately changing dependencies in `pyproject.toml`, then commit
@@ -278,6 +304,7 @@ apps/web/                  Registry and evaluation operator views backed by API 
 packages/contracts/        Shared runtime, retrieval, evaluation, health, and error schemas
 packages/registry/         PostgreSQL repository, lifecycle, bootstrap, and records
 packages/evaluation/       Runner, evaluators, gates, persistence, service, and CLI
+packages/release/          Candidate provenance, guarded state, persistence, service, and CLI
 agents/shared/             Provider-neutral model, retrieval, corpus, and benchmark code
 agents/inventory/          Bounded graph, CLI, and read-only retail tools
 agents/knowledge/          Grounded policy-question agent and CLI

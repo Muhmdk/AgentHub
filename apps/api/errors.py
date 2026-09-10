@@ -14,6 +14,11 @@ from packages.contracts.runtime import AgentErrorCode, AgentExecutionError
 from packages.evaluation.repository import EvaluationConflictError, EvaluationNotFoundError
 from packages.evaluation.service import EvaluationTargetNotFoundError
 from packages.registry.repository import RegistryConflictError, RegistryNotFoundError
+from packages.release.repository import (
+    ReleaseBlockedError,
+    ReleaseConflictError,
+    ReleaseNotFoundError,
+)
 
 logger = logging.getLogger("agenthub.api.errors")
 
@@ -169,6 +174,45 @@ async def evaluation_target_handler(request: Request, exc: Exception) -> Respons
     )
 
 
+async def release_not_found_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, ReleaseNotFoundError):  # pragma: no cover
+        raise TypeError("Expected ReleaseNotFoundError")
+    return _response(
+        404,
+        ErrorPayload(
+            code="release_not_found",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
+async def release_conflict_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, ReleaseConflictError):  # pragma: no cover
+        raise TypeError("Expected ReleaseConflictError")
+    return _response(
+        409,
+        ErrorPayload(
+            code="release_conflict",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
+async def release_blocked_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, ReleaseBlockedError):  # pragma: no cover
+        raise TypeError("Expected ReleaseBlockedError")
+    return _response(
+        409,
+        ErrorPayload(
+            code="release_blocked",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register all public API exception contracts."""
     handlers: tuple[tuple[type[Exception], ExceptionHandler], ...] = (
@@ -178,6 +222,9 @@ def register_error_handlers(app: FastAPI) -> None:
         (EvaluationNotFoundError, evaluation_not_found_handler),
         (EvaluationConflictError, evaluation_conflict_handler),
         (EvaluationTargetNotFoundError, evaluation_target_handler),
+        (ReleaseNotFoundError, release_not_found_handler),
+        (ReleaseConflictError, release_conflict_handler),
+        (ReleaseBlockedError, release_blocked_handler),
         (StarletteHTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),

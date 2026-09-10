@@ -1,0 +1,62 @@
+name: Infrastructure Validation
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - compose.yaml
+      - infra/**
+      - migrations/**
+      - .github/workflows/infrastructure.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate infrastructure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub # pragma: allowlist secret
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+        env:
+          POSTGRES_DB: agenthub
+          POSTGRES_USER: agenthub
+          POSTGRES_PASSWORD: agenthub # pragma: allowlist secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agenthub -d agenthub"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install locked dependencies
+        run: make setup
+      - name: Validate Compose model
+        run: docker compose config --quiet
+      - name: Validate observability configuration
+        run: |
+          for dashboard in infra/observability/grafana/dashboards/*.json; do
+            .venv/bin/python -m json.tool "$dashboard" >/dev/null
+          done
+          docker compose run --rm --no-deps --entrypoint promtool prometheus \
+            check config /etc/prometheus/prometheus.yml
+          docker compose run --rm --no-deps --entrypoint promtool prometheus \
+            test rules /etc/prometheus/alerts.test.yml
+      - name: Validate migrations from an empty database
+        run: |
+          make migrate
+          test "$(.venv/bin/alembic current | awk '{print $1}')" = 0003_releases
+      - name: Build deployable image
+        run: docker build --build-arg SOURCE_SHA="${GITHUB_SHA}" --tag agenthub:infra .

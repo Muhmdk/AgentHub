@@ -1,0 +1,155 @@
+name: Candidate Evaluation
+
+on:
+  workflow_call:
+    inputs:
+      agent:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      candidate_profile:
+        type: string
+        default: default
+      source_sha:
+        type: string
+        default: ""
+      image_digest:
+        type: string
+        default: ""
+    outputs:
+      release_id:
+        value: ${{ jobs.evaluate.outputs.release_id }}
+      provenance_hash:
+        value: ${{ jobs.evaluate.outputs.provenance_hash }}
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: Registered agent name
+        default: inventory-agent
+        required: true
+      version:
+        description: Semantic agent version
+        default: 1.0.0
+        required: true
+      candidate_profile:
+        description: Deterministic evaluation profile
+        type: choice
+        options: [default, regressed]
+        default: default
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    name: Evaluate and register candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      release_id: ${{ steps.candidate.outputs.release_id }}
+      provenance_hash: ${{ steps.candidate.outputs.provenance_hash }}
+    env:
+      AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub # pragma: allowlist secret
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+        env:
+          POSTGRES_DB: agenthub
+          POSTGRES_USER: agenthub
+          POSTGRES_PASSWORD: agenthub # pragma: allowlist secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agenthub -d agenthub"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install locked dependencies
+        run: make setup
+      - name: Migrate release database
+        run: make migrate
+      - name: Register published immutable manifest
+        if: inputs.image_digest != ''
+        env:
+          AGENT: ${{ inputs.agent }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          test "${#SOURCE_SHA}" -eq 40
+          case "$IMAGE_DIGEST" in sha256:????????????????????????????????????????????????????????????????) ;; *) exit 1 ;; esac
+          jq \
+            --arg version "$VERSION" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg image "ghcr.io/muhmdk/agenthub@${IMAGE_DIGEST}" \
+            '.metadata.version = $version | .spec.source.commit_sha = $source_sha | .spec.runtime.image = $image' \
+            "data/manifests/${AGENT}-v1.json" > candidate-manifest.json
+          .venv/bin/python -m packages.registry.bootstrap \
+            --manifest candidate-manifest.json \
+            --actor github-actions
+      - name: Run deterministic evaluation and attach evidence
+        id: candidate
+        env:
+          AGENT: ${{ inputs.agent }}
+          VERSION: ${{ inputs.version }}
+          CANDIDATE_PROFILE: ${{ inputs.candidate_profile }}
+          RELEASE_KEY: candidate-${{ github.run_id }}-${{ inputs.agent }}-${{ inputs.version }}
+        run: |
+          set +e
+          .venv/bin/python -m packages.evaluation \
+            --agent "$AGENT" \
+            --version "$VERSION" \
+            --candidate-profile "$CANDIDATE_PROFILE" \
+            --environment staging > candidate-evaluation.json
+          evaluation_status=$?
+          set -e
+          test "$evaluation_status" -eq 0 || test "$evaluation_status" -eq 2
+
+          .venv/bin/pip-audit --format cyclonedx-json --output candidate-sbom.cdx.json
+          jq -n \
+            --arg source_sha "${{ inputs.source_sha || github.sha }}" \
+            --arg image_digest "${{ inputs.image_digest }}" \
+            --arg workflow "${GITHUB_WORKFLOW}" \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            '{source_sha: $source_sha, image_digest: $image_digest, workflow: $workflow, run_id: $run_id}' \
+            > candidate-build-provenance.json
+
+          set +e
+          .venv/bin/python -m packages.release candidate \
+            --evaluation-report candidate-evaluation.json \
+            --sbom candidate-sbom.cdx.json \
+            --build-provenance candidate-build-provenance.json \
+            --idempotency-key "$RELEASE_KEY" \
+            --actor "github:${{ github.actor }}" > candidate-release.json
+          candidate_status=$?
+          set -e
+          test "$candidate_status" -eq 0 || test "$candidate_status" -eq 2
+          echo "release_id=$(jq -r '.release.id' candidate-release.json)" >> "$GITHUB_OUTPUT"
+          echo "provenance_hash=$(jq -r '.release.provenance_hash' candidate-release.json)" >> "$GITHUB_OUTPUT"
+          echo "gate_passed=$(jq -r '.release.gate.passed' candidate-release.json)" >> "$GITHUB_OUTPUT"
+      - name: Upload candidate evidence
+        if: always() && hashFiles('candidate-*.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: candidate-evidence-${{ github.run_id }}
+          path: |
+            candidate-evaluation.json
+            candidate-sbom.cdx.json
+            candidate-build-provenance.json
+            candidate-release.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce candidate gate
+        env:
+          GATE_PASSED: ${{ steps.candidate.outputs.gate_passed }}
+        run: test "$GATE_PASSED" = true

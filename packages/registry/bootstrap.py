@@ -1,5 +1,6 @@
-"""Register the committed demonstration manifests into PostgreSQL."""
+"""Register committed or explicitly supplied manifests into PostgreSQL."""
 
+import argparse
 import json
 from pathlib import Path
 
@@ -8,17 +9,32 @@ from packages.contracts.manifest import AgentManifest
 from packages.registry.database import Database
 from packages.registry.repository import RegistryRepository
 
+ROOT = Path(__file__).parents[2]
 
-def main() -> int:
+
+def parser() -> argparse.ArgumentParser:
+    command = argparse.ArgumentParser(description="Register immutable AgentHub manifests")
+    command.add_argument(
+        "--manifest",
+        action="append",
+        type=Path,
+        help="Manifest path to register; repeat for multiple files",
+    )
+    command.add_argument("--actor", default="demo-manifest-bootstrap")
+    return command
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = parser().parse_args(argv)
     settings = load_settings()
     database = Database(settings.database_url)
-    manifest_paths = sorted((Path(__file__).parents[2] / "data" / "manifests").glob("*.json"))
+    manifest_paths = arguments.manifest or sorted((ROOT / "data" / "manifests").glob("*.json"))
     try:
         repository = RegistryRepository(database)
         results = [
             repository.register(
                 AgentManifest.model_validate_json(path.read_text(encoding="utf-8")),
-                actor="demo-manifest-bootstrap",
+                actor=arguments.actor,
                 correlation_id=f"bootstrap-{path.stem}",
             )
             for path in manifest_paths
