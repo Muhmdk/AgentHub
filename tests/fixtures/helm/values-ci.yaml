@@ -10,6 +10,11 @@ runtime:
   azureSearchEndpoint: https://example.search.windows.net
   azureSearchIndexName: agenthub-chunks-v1
 
+migrations:
+  databaseUrl: postgresql+psycopg://id-database-bootstrap-agenthub-dev-a1b2@psql-agenthub-dev-a1b2.postgres.database.azure.com:5432/agenthub?sslmode=require
+  appPrincipalName: id-workload-agenthub-dev-a1b2
+  appPrincipalObjectId: 00000000-0000-0000-0000-000000000004
+
 keyVault:
   name: kv-agenthub-ci
   tenantId: 00000000-0000-0000-0000-000000000003

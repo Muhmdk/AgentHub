@@ -21,9 +21,10 @@ output "database_bootstrap_identity" {
 output "postgres" {
   description = "Private PostgreSQL endpoint metadata."
   value = {
-    id   = azurerm_postgresql_flexible_server.environment.id
-    name = azurerm_postgresql_flexible_server.environment.name
-    fqdn = azurerm_postgresql_flexible_server.environment.fqdn
+    id       = azurerm_postgresql_flexible_server.environment.id
+    name     = azurerm_postgresql_flexible_server.environment.name
+    fqdn     = azurerm_postgresql_flexible_server.environment.fqdn
+    database = azurerm_postgresql_flexible_server_database.agenthub.name
   }
 }
 

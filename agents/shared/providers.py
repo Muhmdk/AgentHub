@@ -15,6 +15,7 @@ from agents.shared.corpus import create_retail_retriever, load_retail_corpus
 from agents.shared.model import ChatModel, DeterministicFakeModel
 from agents.shared.retrieval import Retriever
 from packages.contracts.retrieval import CorpusVersion
+from packages.registry.database import Database
 
 
 class ProviderSettings(Protocol):
@@ -22,6 +23,7 @@ class ProviderSettings(Protocol):
 
     model_provider: Literal["fake", "azure-openai"]
     retrieval_provider: Literal["local", "azure-search"]
+    database_auth_mode: Literal["password", "azure-workload-identity"]
     azure_managed_identity_client_id: str | None
     azure_openai_endpoint: str | None
     azure_openai_deployment: str | None
@@ -33,6 +35,8 @@ class ProviderSettings(Protocol):
     azure_search_api_version: str
     azure_search_token_scope: str
     azure_request_timeout_seconds: float
+    azure_postgres_token_scope: str
+    database_url: str
 
 
 @dataclass(frozen=True)
@@ -66,7 +70,9 @@ def create_chat_model(
 def create_provider_bundle(settings: ProviderSettings) -> ProviderBundle:
     """Compose explicit local or Azure adapters from validated settings."""
     uses_azure = (
-        settings.model_provider == "azure-openai" or settings.retrieval_provider == "azure-search"
+        settings.model_provider == "azure-openai"
+        or settings.retrieval_provider == "azure-search"
+        or settings.database_auth_mode == "azure-workload-identity"
     )
     token_provider: AccessTokenProvider | None = None
     if uses_azure:
@@ -118,3 +124,16 @@ def create_provider_bundle(settings: ProviderSettings) -> ProviderBundle:
             token_provider.close()
         raise
     return ProviderBundle(model, retriever, corpus, token_provider)
+
+
+def create_database(settings: ProviderSettings, bundle: ProviderBundle) -> Database:
+    """Compose PostgreSQL with a fresh Entra token for every pooled connection."""
+    if settings.database_auth_mode == "password":
+        return Database(settings.database_url)
+    if bundle.token_provider is None:
+        raise ValueError("Azure PostgreSQL authentication requires an Azure token provider")
+    return Database(
+        settings.database_url,
+        token_provider=bundle.token_provider,
+        token_scope=settings.azure_postgres_token_scope,
+    )

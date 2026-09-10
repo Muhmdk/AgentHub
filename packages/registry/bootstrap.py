@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
+from agents.shared.providers import create_database, create_provider_bundle
 from apps.api.config import load_settings
 from packages.contracts.manifest import AgentManifest
-from packages.registry.database import Database
 from packages.registry.repository import RegistryRepository
 
 ROOT = Path(__file__).parents[2]
@@ -27,7 +27,8 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     settings = load_settings()
-    database = Database(settings.database_url)
+    providers = create_provider_bundle(settings)
+    database = create_database(settings, providers)
     manifest_paths = arguments.manifest or sorted((ROOT / "data" / "manifests").glob("*.json"))
     try:
         repository = RegistryRepository(database)
@@ -41,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         ]
     finally:
         database.dispose()
+        providers.close()
     print(
         json.dumps(
             {

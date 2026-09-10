@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     azure_search_api_version: str = Field(default=AZURE_SEARCH_API_VERSION, min_length=1)
     azure_search_token_scope: str = Field(default=AZURE_SEARCH_SCOPE, min_length=1)
     azure_request_timeout_seconds: float = Field(default=10.0, gt=0.0, le=120.0)
+    database_auth_mode: Literal["password", "azure-workload-identity"] = "password"
+    azure_postgres_token_scope: str = Field(
+        default="https://ossrdbms-aad.database.windows.net/.default",
+        min_length=1,
+    )
     agent_max_steps: int = Field(default=3, ge=1, le=20)
     tool_timeout_seconds: float = Field(default=1.0, gt=0.0, le=30.0)
     agent_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
@@ -82,6 +87,11 @@ class Settings(BaseSettings):
             not self.azure_search_endpoint or not self.azure_search_index_name
         ):
             raise ValueError("Azure Search endpoint and index name are required")
+        if (
+            self.database_auth_mode == "azure-workload-identity"
+            and not self.database_url.startswith("postgresql+psycopg://")
+        ):
+            raise ValueError("Azure PostgreSQL requires a psycopg SQLAlchemy URL")
         return self
 
 

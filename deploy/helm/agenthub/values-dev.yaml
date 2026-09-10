@@ -8,6 +8,7 @@ runtime:
   otelEndpoint: http://otel-collector.agenthub.svc.cluster.local:4318
 
 database:
+  authMode: azure-workload-identity
   createSecret: false
   url: ""
   existingSecret: agenthub-runtime # pragma: allowlist secret
@@ -15,6 +16,10 @@ database:
 
 migrations:
   enabled: true
+  azurePrincipalBootstrap: true
+  databaseUrl: ""
+  appPrincipalName: ""
+  appPrincipalObjectId: ""
 
 autoscaling:
   enabled: true

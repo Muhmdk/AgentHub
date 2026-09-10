@@ -25,6 +25,7 @@ def test_settings_have_safe_local_defaults(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.rag_top_k == 3
     assert settings.rag_minimum_score == 0.15
     assert settings.retrieval_timeout_seconds == 5.0
+    assert settings.database_auth_mode == "password"
     assert settings.database_url.endswith("@127.0.0.1:5433/agenthub")
 
 
@@ -50,6 +51,16 @@ def test_azure_provider_coordinates_are_accepted() -> None:
 
     assert settings.azure_openai_deployment == "gpt-test"
     assert settings.azure_search_index_name == "agenthub-chunks-v1"
+
+
+@pytest.mark.unit
+def test_azure_database_authentication_requires_psycopg_url() -> None:
+    with pytest.raises(ValidationError, match="Azure PostgreSQL requires"):
+        Settings(
+            database_auth_mode="azure-workload-identity",
+            database_url="sqlite:///agenthub.db",
+            _env_file=None,
+        )
 
 
 @pytest.mark.unit

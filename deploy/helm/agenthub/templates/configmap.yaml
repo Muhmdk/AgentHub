@@ -18,6 +18,8 @@ data:
   AGENTHUB_RAG_MINIMUM_SCORE: {{ .Values.runtime.ragMinimumScore | quote }}
   AGENTHUB_RETRIEVAL_TIMEOUT_SECONDS: {{ .Values.runtime.retrievalTimeoutSeconds | quote }}
   AGENTHUB_AZURE_REQUEST_TIMEOUT_SECONDS: {{ .Values.runtime.azureRequestTimeoutSeconds | quote }}
+  AGENTHUB_DATABASE_AUTH_MODE: {{ .Values.database.authMode | quote }}
+  AGENTHUB_AZURE_POSTGRES_TOKEN_SCOPE: {{ .Values.database.azureTokenScope | quote }}
   AGENTHUB_OTEL_ENABLED: {{ .Values.runtime.otelEnabled | quote }}
   AGENTHUB_OTEL_ENDPOINT: {{ .Values.runtime.otelEndpoint | quote }}
   {{- with .Values.runtime.azureManagedIdentityClientId }}

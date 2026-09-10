@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
 from agents.knowledge.agent import KnowledgeAgent
-from agents.shared.providers import create_provider_bundle
+from agents.shared.providers import create_database, create_provider_bundle
 from agents.shopping.agent import ShoppingAgent
 from agents.shopping.tools import ProductSearchTool
 from apps.api.config import Settings, load_settings
@@ -116,7 +116,7 @@ def create_app(
     owns_registry_database = False
     if registry_store is None:
         if registry_database is None:
-            registry_database = Database(app_settings.database_url)
+            registry_database = create_database(app_settings, providers)
             owns_registry_database = True
         registry: RegistryStore = RegistryRepository(registry_database)
     else:

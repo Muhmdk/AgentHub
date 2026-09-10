@@ -135,8 +135,10 @@
     "database": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["createSecret", "url", "existingSecret", "secretKey"],
+      "required": ["authMode", "azureTokenScope", "createSecret", "url", "existingSecret", "secretKey"],
       "properties": {
+        "authMode": { "enum": ["password", "azure-workload-identity"] },
+        "azureTokenScope": { "type": "string", "minLength": 1 },
         "createSecret": { "type": "boolean" },
         "url": { "type": "string" },
         "existingSecret": { "type": "string" },
@@ -146,9 +148,25 @@
     "migrations": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "backoffLimit", "serviceAccount", "resources"],
+      "required": [
+        "enabled",
+        "azurePrincipalBootstrap",
+        "databaseUrl",
+        "appPrincipalName",
+        "appPrincipalObjectId",
+        "backoffLimit",
+        "serviceAccount",
+        "resources"
+      ],
       "properties": {
         "enabled": { "type": "boolean" },
+        "azurePrincipalBootstrap": { "type": "boolean" },
+        "databaseUrl": { "type": "string" },
+        "appPrincipalName": { "type": "string" },
+        "appPrincipalObjectId": {
+          "type": "string",
+          "pattern": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
         "backoffLimit": { "type": "integer", "minimum": 0, "maximum": 10 },
         "serviceAccount": {
           "type": "object",

@@ -225,6 +225,17 @@ resource "azurerm_postgresql_flexible_server_active_directory_administrator" "da
   principal_type      = "ServicePrincipal"
 }
 
+resource "azurerm_postgresql_flexible_server_database" "agenthub" {
+  name      = "agenthub"
+  server_id = azurerm_postgresql_flexible_server.environment.id
+  collation = "en_US.utf8"
+  charset   = "UTF8"
+
+  depends_on = [
+    azurerm_postgresql_flexible_server_active_directory_administrator.database_bootstrap,
+  ]
+}
+
 resource "azurerm_key_vault" "environment" {
   name                          = substr("kv-${local.base_name}", 0, 24)
   resource_group_name           = var.resource_group.name

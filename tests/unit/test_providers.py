@@ -9,7 +9,7 @@ from agents.shared.azure import (
     AzureSearchRetriever,
 )
 from agents.shared.model import DeterministicFakeModel
-from agents.shared.providers import create_chat_model, create_provider_bundle
+from agents.shared.providers import create_chat_model, create_database, create_provider_bundle
 from agents.shared.retrieval import InMemoryRetriever
 from apps.api.config import Settings
 
@@ -96,6 +96,34 @@ def test_azure_provider_bundle_shares_and_closes_token_provider(
     assert created[0].client_id == "workload-client-id"
     bundle.close()
     assert created[0].closed
+
+
+@pytest.mark.unit
+def test_azure_database_authentication_uses_the_shared_token_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ConfiguredTokenProvider(OfflineTokenProvider):
+        def __init__(self, client_id: str | None) -> None:
+            self.client_id = client_id
+
+    monkeypatch.setattr(
+        "agents.shared.providers.DefaultAzureTokenProvider", ConfiguredTokenProvider
+    )
+    settings = Settings(
+        database_auth_mode="azure-workload-identity",
+        database_url="postgresql+psycopg://agenthub@database.example/agenthub",
+        azure_managed_identity_client_id="database-client-id",
+        _env_file=None,
+    )
+    bundle = create_provider_bundle(settings)
+    database = create_database(settings, bundle)
+    try:
+        assert database._token_provider is bundle.token_provider
+        assert isinstance(bundle.token_provider, ConfiguredTokenProvider)
+        assert bundle.token_provider.client_id == "database-client-id"
+    finally:
+        database.dispose()
+        bundle.close()
 
 
 @pytest.mark.unit

@@ -45,6 +45,8 @@ runtime:
   otelEndpoint: http://otel-collector:4318
 
 database:
+  authMode: password
+  azureTokenScope: https://ossrdbms-aad.database.windows.net/.default
   createSecret: true
   url: postgresql+psycopg://agenthub:agenthub@postgres:5432/agenthub # pragma: allowlist secret
   existingSecret: ""
@@ -52,6 +54,10 @@ database:
 
 migrations:
   enabled: true
+  azurePrincipalBootstrap: false
+  databaseUrl: ""
+  appPrincipalName: ""
+  appPrincipalObjectId: ""
   backoffLimit: 3
   serviceAccount:
     create: true

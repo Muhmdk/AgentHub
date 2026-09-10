@@ -65,6 +65,11 @@ run "plans_secure_development_platform" {
   }
 
   assert {
+    condition     = azurerm_postgresql_flexible_server_database.agenthub.name == "agenthub"
+    error_message = "The application database must be managed explicitly."
+  }
+
+  assert {
     condition     = !azurerm_search_service.environment.local_authentication_enabled && azurerm_search_service.environment.sku == "basic"
     error_message = "Search must use managed identity-compatible Basic without local keys."
   }

@@ -12,7 +12,7 @@ from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
 from agents.knowledge.agent import KnowledgeAgent
 from agents.shared.corpus import create_retail_retriever
-from agents.shared.providers import create_chat_model
+from agents.shared.providers import create_chat_model, create_database, create_provider_bundle
 from agents.shopping.agent import ShoppingAgent
 from agents.shopping.tools import ProductSearchTool
 from apps.api.config import load_settings
@@ -21,7 +21,6 @@ from packages.contracts.manifest import AgentManifest
 from packages.evaluation.repository import EvaluationRepository
 from packages.evaluation.runner import EvaluationTarget
 from packages.evaluation.service import EvaluationService
-from packages.registry.database import Database
 from packages.registry.repository import RegistryNotFoundError, RegistryRepository
 
 ROOT = Path(__file__).parents[2]
@@ -111,7 +110,8 @@ def junit(report: EvaluationRunReport) -> str:
 
 async def run(arguments: argparse.Namespace) -> EvaluationRunReport:
     settings = load_settings()
-    database = Database(settings.database_url)
+    providers = create_provider_bundle(settings)
+    database = create_database(settings, providers)
     try:
         store = EvaluationRepository(database)
         if arguments.replay_run_id is not None:
@@ -135,6 +135,7 @@ async def run(arguments: argparse.Namespace) -> EvaluationRunReport:
         )
     finally:
         database.dispose()
+        providers.close()
 
 
 def main(argv: list[str] | None = None) -> int:
