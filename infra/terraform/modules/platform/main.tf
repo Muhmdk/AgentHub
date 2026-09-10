@@ -281,6 +281,14 @@ resource "azurerm_role_assignment" "workload_key_vault" {
   principal_id         = var.workload_identity.principal_id
 }
 
+resource "azurerm_role_assignment" "operator_key_vault_secrets" {
+  for_each = toset(var.aks_admin_group_object_ids)
+
+  scope                = azurerm_key_vault.environment.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = each.value
+}
+
 resource "azurerm_role_assignment" "workload_search" {
   scope                = azurerm_search_service.environment.id
   role_definition_name = "Search Index Data Reader"

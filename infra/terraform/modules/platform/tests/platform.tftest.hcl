@@ -80,6 +80,11 @@ run "plans_secure_development_platform" {
   }
 
   assert {
+    condition     = length(azurerm_role_assignment.operator_key_vault_secrets) == length(var.aks_admin_group_object_ids)
+    error_message = "Every approved operator group must be able to provision runtime Key Vault secrets."
+  }
+
+  assert {
     condition     = azurerm_log_analytics_workspace.environment.daily_quota_gb <= 0.15
     error_message = "Log ingestion must stay within the reviewed daily cap."
   }
