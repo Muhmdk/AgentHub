@@ -24,6 +24,7 @@ def test_every_workflow_is_valid_yaml_with_read_only_default_permissions() -> No
     paths = sorted(WORKFLOWS.glob("*.yml"))
 
     assert {path.name for path in paths} == {
+        "azure-smoke.yml",
         "candidate-evaluation.yml",
         "ci.yml",
         "infrastructure.yml",

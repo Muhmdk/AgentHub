@@ -8,7 +8,7 @@ KUBECONFORM ?= kubeconform
 HELM_CHART := deploy/helm/agenthub
 HELM_CI_VALUES := tests/fixtures/helm/values-ci.yaml
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security infra-terraform infra-helm infra-validate up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security infra-terraform infra-helm infra-validate smoke-deployment up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -27,7 +27,7 @@ lint:
 	$(BIN)/ruff check .
 
 typecheck:
-	$(BIN)/mypy agents apps packages tests
+	$(BIN)/mypy agents apps packages scripts tests
 
 test:
 	$(BIN)/pytest
@@ -73,6 +73,10 @@ infra-helm:
 	$(BIN)/python scripts/validate_kubernetes_security.py --require-image-digest "$$render_dir/dev.yaml"
 
 infra-validate: infra-terraform infra-helm
+
+smoke-deployment:
+	test -n "$(BASE_URL)"
+	$(BIN)/python scripts/smoke_deployment.py --base-url "$(BASE_URL)" $(SMOKE_ARGS)
 
 up:
 	docker compose up --detach --wait postgres

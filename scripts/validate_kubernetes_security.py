@@ -131,7 +131,7 @@ def validate(documents: Sequence[Mapping[str, Any]], require_image_digest: bool)
 
 def load_documents(path: Path) -> list[Mapping[str, Any]]:
     """Load one rendered multi-document YAML file."""
-    documents = []
+    documents: list[Mapping[str, Any]] = []
     for document in yaml.safe_load_all(path.read_text(encoding="utf-8")):
         if document is None:
             continue

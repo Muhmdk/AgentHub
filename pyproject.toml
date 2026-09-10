@@ -40,7 +40,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["agents*", "apps*", "packages*"]
+include = ["agents*", "apps*", "packages*", "scripts*"]
 
 [tool.setuptools.package-data]
 "apps.web" = ["*.html"]
