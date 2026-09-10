@@ -17,11 +17,15 @@ Set only the provider you intend to use. There is no automatic cloud fallback.
 | `AGENTHUB_AZURE_OPENAI_DEPLOYMENT` | unset | existing deployment name |
 | `AGENTHUB_AZURE_SEARCH_ENDPOINT` | unset | Terraform `platform.search.endpoint` output |
 | `AGENTHUB_AZURE_SEARCH_INDEX_NAME` | unset | existing index name |
+| `AGENTHUB_DATABASE_AUTH_MODE` | `password` | set to `azure-workload-identity` on AKS |
+| `AGENTHUB_AZURE_POSTGRES_TOKEN_SCOPE` | Azure PostgreSQL scope | token audience for passwordless database connections |
+| `AGENTHUB_OTEL_EXPORTER` | `otlp` | set to `azure-monitor` in the dev chart |
+| `AGENTHUB_AZURE_MONITOR_CONNECTION_STRING` | unset | Application Insights routing coordinates loaded from Key Vault |
 
 `DefaultAzureCredential` acquires Entra tokens. In AKS, the `agenthub` service account must
 carry the workload identity label and client-ID annotation described by the Helm chart. Local
-Azure testing may use an existing Azure CLI login; API keys and connection strings are not
-supported by these adapters.
+Azure testing may use an existing Azure CLI login. The model and Search adapters do not accept API
+keys; Azure Monitor uses its connection string only for routing and uses Entra for authentication.
 
 The Azure OpenAI adapter calls the OpenAI-compatible
 `/openai/v1/chat/completions` route. Its default token scope is
@@ -80,9 +84,9 @@ The committed retail fixture currently uses the metadata children `category`, `k
 types to match the source values. Azure Search schemas do not accept undeclared dynamic complex
 children.
 
-Use a separate, short-lived operator or deployment identity with `Search Service Contributor`
-and `Search Index Data Contributor` to create the index and upload chunks. Do not grant document
-write access to the application service account. The upload must preserve the committed
+Use an approved operator group's short-lived Entra session with `Search Service Contributor` and
+`Search Index Data Contributor` to create the index and upload chunks from a reviewed operator
+CIDR. Do not grant document write access to the application service account. The upload must preserve the committed
 `retail-products-policies` / `v1` corpus coordinates and chunk hashes so retrieval evidence stays
 reproducible.
 
@@ -94,6 +98,20 @@ reproducible.
   falls back to the fake model or local corpus.
 - The shared credential is closed during API shutdown and after each CLI invocation.
 - No live Azure calls are made by unit tests. Tests inject recording token and HTTP boundaries.
+
+## PostgreSQL and Azure Monitor adapters
+
+The dev database URL contains the workload identity name but no password. SQLAlchemy requests a
+fresh Entra token for every new DBAPI connection and passes that token only as the PostgreSQL
+password. A pre-install Helm hook uses a separate federated administrator identity to create or
+reuse the workload principal, run migrations, and grant connection plus DML permissions. The API
+identity is never a PostgreSQL administrator.
+
+Local telemetry continues to use OTLP/HTTP. The dev profile selects the Azure Monitor trace and
+metric exporters, uses the same workload identity for Entra authentication, and disables exporter
+disk storage for the chart's read-only filesystem. The Application Insights connection string
+provides routing coordinates and is mounted from Key Vault rather than committed or passed through
+Terraform variables.
 
 ## References
 

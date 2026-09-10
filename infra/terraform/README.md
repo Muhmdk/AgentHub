@@ -44,7 +44,7 @@ terraform show -json dev.tfplan > dev.tfplan.json
 
 Review the human-readable plan, the policy result, and the refreshed cost estimate before an
 operator runs `terraform apply dev.tfplan`. See
-[`docs/azure/architecture-and-cost.md`](../../../docs/azure/architecture-and-cost.md) for the
+[`docs/azure/architecture-and-cost.md`](../../docs/azure/architecture-and-cost.md) for the
 approved inventory, threat boundary, and monthly ceiling.
 
 ## Offline validation
@@ -60,3 +60,11 @@ chart and both values profiles, checks rendered built-in Kubernetes resources ag
 schemas, and enforces the dev security contract. The pull-request infrastructure workflow
 downloads those exact CLI versions with pinned SHA-256 checksums and runs the same targets. It
 does not authenticate to Azure, run a live plan, or apply resources.
+
+For reviewed live operations, follow the runbooks in order:
+
+1. [deploy](../../docs/runbooks/azure-deploy.md)
+2. [verify](../../docs/runbooks/azure-verify.md)
+3. [troubleshoot](../../docs/runbooks/azure-troubleshoot.md), when needed
+4. [cost control](../../docs/runbooks/azure-cost-control.md)
+5. [teardown](../../docs/runbooks/azure-teardown.md)

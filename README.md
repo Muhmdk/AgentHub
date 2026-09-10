@@ -126,6 +126,19 @@ Stop the foreground server with `Ctrl-C`. Interactive API documentation is avail
 For local traces, metrics, dashboards, SLOs, alerts, and runbooks, see the
 [observability guide](docs/observability.md).
 
+## Azure development environment
+
+Phase 07 adds validated Terraform for the remote-state and dev boundaries, a restricted Helm
+chart for AKS, workload-identity adapters for Azure OpenAI, AI Search, PostgreSQL, and Azure
+Monitor, plus one smoke suite that runs locally or through a port-forwarded ClusterIP Service.
+No Azure resource is provisioned by CI or by repository setup commands.
+
+Start with the [Azure deployment runbook](docs/runbooks/azure-deploy.md), then use the dedicated
+[verification](docs/runbooks/azure-verify.md),
+[troubleshooting](docs/runbooks/azure-troubleshoot.md),
+[cost-control](docs/runbooks/azure-cost-control.md), and
+[teardown](docs/runbooks/azure-teardown.md) procedures.
+
 ## Evaluation and release gates
 
 Run the default Inventory Agent suite and print its immutable JSON report:
@@ -227,18 +240,21 @@ take the same names and take precedence.
 | `AGENTHUB_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `AGENTHUB_API_HOST` | `127.0.0.1` | Non-empty host string |
 | `AGENTHUB_API_PORT` | `8000` | `1` through `65535` |
-| `AGENTHUB_MODEL_PROVIDER` | `fake` | `fake` |
+| `AGENTHUB_MODEL_PROVIDER` | `fake` | `fake` or `azure-openai` |
+| `AGENTHUB_RETRIEVAL_PROVIDER` | `local` | `local` or `azure-search` |
 | `AGENTHUB_AGENT_MAX_STEPS` | `3` | `1` through `20` |
 | `AGENTHUB_TOOL_TIMEOUT_SECONDS` | `1.0` | Greater than `0`, at most `30` |
 | `AGENTHUB_AGENT_TIMEOUT_SECONDS` | `5.0` | Greater than `0`, at most `120` |
 | `AGENTHUB_RAG_TOP_K` | `3` | `1` through `20` |
 | `AGENTHUB_RAG_MINIMUM_SCORE` | `0.15` | `0` through `1` |
 | `AGENTHUB_RETRIEVAL_TIMEOUT_SECONDS` | `5.0` | Greater than `0`, at most `120` |
-| `AGENTHUB_OTEL_ENABLED` | `false` | Enable bounded OTLP trace and metric export |
+| `AGENTHUB_OTEL_ENABLED` | `false` | Enable bounded trace and metric export |
+| `AGENTHUB_OTEL_EXPORTER` | `otlp` | `otlp` locally or `azure-monitor` on AKS |
 | `AGENTHUB_OTEL_ENDPOINT` | `http://127.0.0.1:4318` | Collector OTLP/HTTP base URL |
 | `AGENTHUB_OTEL_EXPORT_INTERVAL_MS` | `5000` | `100` through `60000` |
 | `AGENTHUB_OTEL_MAX_QUEUE_SIZE` | `256` | `64` through `4096` |
 | `AGENTHUB_DATABASE_URL` | Local PostgreSQL on port `5433` | SQLAlchemy PostgreSQL URL |
+| `AGENTHUB_DATABASE_AUTH_MODE` | `password` | `password` or `azure-workload-identity` |
 
 Malformed configuration stops startup with the invalid field and error category. The
 submitted value is deliberately omitted so a mistaken secret cannot be echoed.
@@ -257,6 +273,8 @@ submitted value is deliberately omitted so a mistaken secret cannot be echoed.
 | `make test-integration` | Run component/process integration tests |
 | `make test-e2e` | Run the process-level readiness smoke test |
 | `make security` | Scan tracked files for secrets and audit dependencies |
+| `make infra-validate` | Validate Terraform modules, Helm profiles, schemas, and Kubernetes security |
+| `make smoke-deployment BASE_URL=...` | Run the bounded local/Azure post-deploy verification |
 | `make up` | Start and health-check the local PostgreSQL container |
 | `make observability-up` | Start PostgreSQL, Collector, Prometheus, Tempo, and Grafana |
 | `make observability-down` | Stop the observability services and leave PostgreSQL running |

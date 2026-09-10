@@ -1,7 +1,7 @@
 # AgentHub Helm chart
 
 This chart packages the existing AgentHub API, its inventory/knowledge/shopping endpoints, a
-gateway-facing ClusterIP Service, and an Alembic post-install/post-upgrade migration Job.
+gateway-facing ClusterIP Service, and a pre-install/pre-upgrade migration Job.
 
 Local rendering uses the offline fake model and in-memory retriever:
 
@@ -30,14 +30,25 @@ helm upgrade --install agenthub deploy/helm/agenthub \
   --set-string runtime.azureOpenAIDeployment="<deployment>" \
   --set-string runtime.azureSearchEndpoint="https://<service>.search.windows.net" \
   --set-string runtime.azureSearchIndexName="agenthub-chunks-v1" \
+  --set-string migrations.databaseUrl="postgresql+psycopg://<bootstrap-identity>@<server>.postgres.database.azure.com:5432/agenthub?sslmode=require" \
+  --set-string migrations.appPrincipalName="<workload-identity-name>" \
+  --set-string migrations.appPrincipalObjectId="<workload-principal-object-id>" \
   --set-string keyVault.name="<vault-name>" \
   --set-string keyVault.tenantId="<tenant-id>"
 ```
 
-Dev does not render credential values. The Secrets Store CSI driver mounts the selected Key Vault
-objects and syncs the database URL to the `agenthub-runtime` Secret consumed by the API and
-migration job. The application and migration job use separate annotated service accounts matching
-the Terraform workload identity subjects.
+Dev does not render credentials. The Secrets Store CSI driver mounts the selected Key Vault
+objects and syncs the passwordless application database URL and Azure Monitor routing string to
+the `agenthub-runtime` Secret consumed by the API. The pre-install migration hook uses its separate
+annotated service account, obtains a short-lived PostgreSQL token, creates the non-admin workload
+role, applies Alembic migrations, and grants only application DML access. The application obtains a
+fresh token for every new pooled connection. Both service accounts exactly match the Terraform
+workload identity subjects.
+
+The dev profile sends traces and metrics directly to Azure Monitor through managed identity. The
+local profile retains the vendor-neutral OTLP/HTTP exporter and local Collector. Index creation and
+document ingestion remain a separately privileged operation; the API identity has Search read
+access only. Follow the complete [Azure deployment runbook](../../../docs/runbooks/azure-deploy.md).
 
 The default security profile runs both containers as UID/GID 65532 with a read-only root
 filesystem, all Linux capabilities dropped, `RuntimeDefault` seccomp, bounded `/tmp` storage,

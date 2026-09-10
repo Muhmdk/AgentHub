@@ -16,15 +16,15 @@ CI only formats, validates, scans, and produces a reviewed plan.
 flowchart LR
     GH[GitHub Actions] -->|OIDC federation| DEPLOY[deployment identity]
     DEPLOY -->|Azure RBAC| AZ[Azure control plane]
-    USER[operator or smoke test] -->|HTTPS| LB[AKS public endpoint]
-    LB --> API[AgentHub pods]
+    USER[operator or smoke test] -->|kubectl port-forward| SVC[ClusterIP Service]
+    SVC --> API[AgentHub pods]
     API -->|workload identity| ID[AgentHub managed identity]
     ID --> KV[Key Vault]
     ID --> ACR[Container Registry]
     ID --> SEARCH[AI Search]
     ID --> MODEL[Azure OpenAI / Foundry]
     API -->|private delegated subnet| PG[PostgreSQL Flexible Server]
-    API -->|OTLP| MON[Azure Monitor / Log Analytics]
+    API -->|managed identity exporters| MON[Azure Monitor / Log Analytics]
 ```
 
 The development cluster uses the AKS Free control-plane tier and one Linux system node. It is not
@@ -64,14 +64,17 @@ the application environment cannot destroy its own audit trail or lock.
   is the initial Entra administrator and creates the least-privilege application role; application
   pods use their own managed-identity token for normal database access.
 - The workload identity receives data-plane roles only: read selected Key Vault secrets, query
-  Search, and invoke the configured model. The kubelet identity receives ACR pull only.
+  Search, invoke the configured model, and publish Azure Monitor telemetry. The kubelet identity
+  receives ACR pull only. Approved operator groups receive Key Vault secret-write access so they
+  can provision the two runtime values without placing them in Terraform.
 - The AKS API is public for the cost-conscious dev environment but restricted to explicit operator
   CIDRs. Kubernetes local accounts are disabled and Entra RBAC is enabled.
 - PostgreSQL uses private access in its delegated subnet. Key Vault uses its network ACL and the
-  AKS subnet service endpoint. Search allows only the known AKS egress address when its SKU and
-  regional behavior permit it. A future production environment should use private endpoints and
-  Premium ACR after pricing those choices.
-- The ingress service is the only public workload endpoint. Default-deny Kubernetes network
+  AKS subnet service endpoint. Search allows the known AKS egress address plus the reviewed
+  operator CIDRs used for index bootstrap. A future production environment should use private
+  endpoints and Premium ACR after pricing those choices.
+- The chart exposes only a ClusterIP Service. Operator verification uses `kubectl port-forward`;
+  any public ingress requires a separate threat and cost review. Default-deny Kubernetes network
   policies restrict pod ingress and egress; DNS, PostgreSQL, Azure identity, Key Vault, Search,
   model, and telemetry destinations are explicitly allowed.
 - Secret values are created outside Terraform. Terraform stores only Key Vault secret names and
@@ -124,6 +127,12 @@ alone.
    state account and its versioned state until the final destroy plan and resource inventory have
    been reviewed.
 7. Query actual cost by the mandatory tags after deployment and compare it with this estimate.
+
+The operator procedures are split into
+[deploy](../runbooks/azure-deploy.md), [verify](../runbooks/azure-verify.md),
+[troubleshoot](../runbooks/azure-troubleshoot.md),
+[cost control](../runbooks/azure-cost-control.md), and
+[teardown](../runbooks/azure-teardown.md) runbooks.
 
 ## Quotas and manual prerequisites
 
