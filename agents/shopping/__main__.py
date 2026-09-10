@@ -5,8 +5,7 @@ import asyncio
 import sys
 from collections.abc import Sequence
 
-from agents.shared.corpus import create_retail_retriever
-from agents.shared.providers import create_chat_model
+from agents.shared.providers import create_provider_bundle
 from agents.shopping.agent import ShoppingAgent
 from agents.shopping.tools import ProductSearchTool
 from apps.api.config import load_settings
@@ -21,10 +20,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parsed = parser.parse_args(arguments)
     settings = load_settings()
-    retriever, corpus, _ = create_retail_retriever()
+    providers = create_provider_bundle(settings)
     agent = ShoppingAgent(
-        product_tool=ProductSearchTool(retriever, corpus),
-        model=create_chat_model(settings.model_provider),
+        product_tool=ProductSearchTool(providers.retriever, providers.corpus),
+        model=providers.model,
         timeout_seconds=settings.agent_timeout_seconds,
     )
     try:
@@ -32,6 +31,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
     except AgentExecutionError as exc:
         print(f"{exc.code.value}: {exc.message}", file=sys.stderr)
         return 2
+    finally:
+        providers.close()
     print(response.model_dump_json(indent=2))
     return 0
 

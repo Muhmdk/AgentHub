@@ -2,10 +2,16 @@
 
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from agents.shared.azure import (
+    AZURE_OPENAI_SCOPE,
+    AZURE_SEARCH_API_VERSION,
+    AZURE_SEARCH_SCOPE,
+)
 
 
 def installed_version() -> str:
@@ -31,7 +37,19 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     api_host: str = Field(default="127.0.0.1", min_length=1)
     api_port: int = Field(default=8000, ge=1, le=65535)
-    model_provider: Literal["fake"] = "fake"
+    model_provider: Literal["fake", "azure-openai"] = "fake"
+    retrieval_provider: Literal["local", "azure-search"] = "local"
+    azure_managed_identity_client_id: str | None = None
+    azure_openai_endpoint: str | None = None
+    azure_openai_deployment: str | None = None
+    azure_openai_token_scope: str = Field(default=AZURE_OPENAI_SCOPE, min_length=1)
+    azure_openai_input_cost_per_million: float = Field(default=0.0, ge=0.0)
+    azure_openai_output_cost_per_million: float = Field(default=0.0, ge=0.0)
+    azure_search_endpoint: str | None = None
+    azure_search_index_name: str | None = None
+    azure_search_api_version: str = Field(default=AZURE_SEARCH_API_VERSION, min_length=1)
+    azure_search_token_scope: str = Field(default=AZURE_SEARCH_SCOPE, min_length=1)
+    azure_request_timeout_seconds: float = Field(default=10.0, gt=0.0, le=120.0)
     agent_max_steps: int = Field(default=3, ge=1, le=20)
     tool_timeout_seconds: float = Field(default=1.0, gt=0.0, le=30.0)
     agent_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
@@ -52,6 +70,19 @@ class Settings(BaseSettings):
         min_length=1,
     )
     version: str = Field(default_factory=installed_version, min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_selected_providers(self) -> Self:
+        """Require Azure coordinates only when a network provider is selected."""
+        if self.model_provider == "azure-openai" and (
+            not self.azure_openai_endpoint or not self.azure_openai_deployment
+        ):
+            raise ValueError("Azure OpenAI endpoint and deployment are required")
+        if self.retrieval_provider == "azure-search" and (
+            not self.azure_search_endpoint or not self.azure_search_index_name
+        ):
+            raise ValueError("Azure Search endpoint and index name are required")
+        return self
 
 
 class ConfigurationError(RuntimeError):

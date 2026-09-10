@@ -13,8 +13,7 @@ from fastapi.responses import FileResponse
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
 from agents.knowledge.agent import KnowledgeAgent
-from agents.shared.corpus import create_retail_retriever
-from agents.shared.providers import create_chat_model
+from agents.shared.providers import create_provider_bundle
 from agents.shopping.agent import ShoppingAgent
 from agents.shopping.tools import ProductSearchTool
 from apps.api.config import Settings, load_settings
@@ -86,7 +85,8 @@ def create_app(
             max_queue_size=app_settings.otel_max_queue_size,
         )
     )
-    model = create_chat_model(app_settings.model_provider)
+    providers = create_provider_bundle(app_settings)
+    model = providers.model
     inventory = inventory_agent or InventoryAgent(
         data=RetailData.load(),
         model=model,
@@ -95,7 +95,8 @@ def create_app(
         execution_timeout_seconds=app_settings.agent_timeout_seconds,
         telemetry=telemetry,
     )
-    retriever, corpus, _ = create_retail_retriever()
+    retriever = providers.retriever
+    corpus = providers.corpus
     knowledge = knowledge_agent or KnowledgeAgent(
         retriever=retriever,
         corpus=corpus,
@@ -152,6 +153,7 @@ def create_app(
         try:
             yield
         finally:
+            providers.close()
             telemetry.shutdown()
             if owns_registry_database and registry_database is not None:
                 registry_database.dispose()

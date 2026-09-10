@@ -94,3 +94,16 @@ run "rejects_excess_telemetry_cap" {
 
   expect_failures = [var.log_daily_quota_gb]
 }
+
+run "grants_optional_azure_openai_access" {
+  command = plan
+
+  variables {
+    azure_openai_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg-model/providers/Microsoft.CognitiveServices/accounts/openai-agenthub"
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.workload_azure_openai[0].role_definition_name == "Cognitive Services OpenAI User"
+    error_message = "The workload identity must receive only the Azure OpenAI inference role."
+  }
+}

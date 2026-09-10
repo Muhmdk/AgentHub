@@ -276,6 +276,14 @@ resource "azurerm_role_assignment" "workload_search" {
   principal_id         = var.workload_identity.principal_id
 }
 
+resource "azurerm_role_assignment" "workload_azure_openai" {
+  count = var.azure_openai_resource_id == null ? 0 : 1
+
+  scope                = var.azure_openai_resource_id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = var.workload_identity.principal_id
+}
+
 resource "azurerm_role_assignment" "workload_monitor" {
   scope                = azurerm_application_insights.environment.id
   role_definition_name = "Monitoring Metrics Publisher"

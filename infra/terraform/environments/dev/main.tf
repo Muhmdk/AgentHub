@@ -29,6 +29,7 @@ module "platform" {
   container_registry_id        = module.foundation.container_registry.id
   aks_identities               = module.foundation.aks_identities
   workload_identity            = module.foundation.workload_identity
+  azure_openai_resource_id     = var.azure_openai_resource_id
   aks_admin_group_object_ids   = var.aks_admin_group_object_ids
   aks_api_authorized_ip_ranges = var.aks_api_authorized_ip_ranges
   key_vault_operator_ip_rules  = var.key_vault_operator_ip_rules

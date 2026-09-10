@@ -115,6 +115,13 @@ variable "key_vault_operator_ip_rules" {
   default     = []
 }
 
+variable "azure_openai_resource_id" {
+  description = "Optional existing Azure OpenAI account used by AgentHub; account and deployment creation are quota-gated outside this stack."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "vnet_cidr" {
   description = "Virtual network address range."
   type        = string

@@ -78,6 +78,18 @@ variable "workload_identity" {
   })
 }
 
+variable "azure_openai_resource_id" {
+  description = "Optional existing Azure OpenAI account granted to the workload identity; model deployment remains an explicit quota-aware operation."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.azure_openai_resource_id == null || can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.CognitiveServices/accounts/[^/]+$", var.azure_openai_resource_id))
+    error_message = "azure_openai_resource_id must be a complete Cognitive Services account resource ID when set."
+  }
+}
+
 variable "aks_admin_group_object_ids" {
   description = "Entra group object IDs granted AKS administrator access."
   type        = list(string)
