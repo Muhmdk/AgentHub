@@ -38,14 +38,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub
+      AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub # pragma: allowlist secret
     services:
       postgres:
         image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
         env:
           POSTGRES_DB: agenthub
           POSTGRES_USER: agenthub
-          POSTGRES_PASSWORD: agenthub
+          POSTGRES_PASSWORD: agenthub # pragma: allowlist secret
         ports:
           - 5432:5432
         options: >-
@@ -64,14 +64,8 @@ jobs:
         run: make setup
       - name: Migrate empty database
         run: make migrate
-      - name: Run unit tests
-        run: make test-unit
-      - name: Run contract tests
-        run: make test-contract
-      - name: Run integration tests
-        run: make test-integration
-      - name: Run selected end-to-end tests
-        run: make test-e2e
+      - name: Run unit, contract, integration, and selected end-to-end tests
+        run: make test
 
   container:
     name: Container smoke test
@@ -83,7 +77,7 @@ jobs:
       - name: Build image once
         run: docker build --build-arg SOURCE_SHA="${GITHUB_SHA}" --tag agenthub:ci .
       - name: Verify non-root runtime
-        run: test "$(docker image inspect agenthub:ci --format '{{.Config.User}}')" = "10001:10001"
+        run: test "$(docker image inspect agenthub:ci --format '{{.Config.User}}')" = "65532:65532"
       - name: Verify container liveness
         run: |
           docker run --detach --name agenthub-ci --publish 8000:8000 agenthub:ci

@@ -59,10 +59,7 @@ def test_pr_ci_covers_required_checks_and_preserves_quality_gate() -> None:
     for command in (
         "make lint",
         "make typecheck",
-        "make test-unit",
-        "make test-contract",
-        "make test-integration",
-        "make test-e2e",
+        "make test",
         "make security",
     ):
         assert command in workflow

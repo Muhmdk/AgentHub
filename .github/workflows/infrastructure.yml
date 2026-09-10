@@ -19,14 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub
+      AGENTHUB_DATABASE_URL: postgresql+psycopg://agenthub:agenthub@127.0.0.1:5432/agenthub # pragma: allowlist secret
     services:
       postgres:
         image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
         env:
           POSTGRES_DB: agenthub
           POSTGRES_USER: agenthub
-          POSTGRES_PASSWORD: agenthub
+          POSTGRES_PASSWORD: agenthub # pragma: allowlist secret
         ports:
           - 5432:5432
         options: >-

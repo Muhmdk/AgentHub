@@ -1,8 +1,10 @@
-ARG PYTHON_BASE=python:3.14.3-slim@sha256:5e59aae31ff0e87511226be8e2b94d78c58f05216efda3b07dbbed938ec8583b
+ARG PYTHON_BUILDER=cgr.dev/chainguard/python:latest-dev@sha256:725c9da49a8d07f1449f7f9751432eef57801376258b223e3951c67245824085
+ARG PYTHON_RUNTIME=cgr.dev/chainguard/python:latest@sha256:fd502ec3300f98c4a7c4fb57314116c139291661cbff6b657e2297f2ada76930
 
-FROM ${PYTHON_BASE} AS builder
+FROM ${PYTHON_BUILDER} AS builder
 
 ARG UV_VERSION=0.12.11
+USER root
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     VIRTUAL_ENV=/app/.venv \
@@ -20,9 +22,10 @@ COPY alembic.ini ./
 RUN python -m venv "${VIRTUAL_ENV}" \
     && python -m pip install "uv==${UV_VERSION}" \
     && uv sync --active --frozen --no-dev --no-editable \
+    && python -m pip uninstall --yes uv setuptools pip \
     && python -m compileall -q agents apps packages
 
-FROM ${PYTHON_BASE} AS runtime
+FROM ${PYTHON_RUNTIME} AS runtime
 
 ARG SOURCE_SHA=unknown
 ARG VERSION=0.3.0-dev
@@ -39,13 +42,10 @@ ENV PYTHONUNBUFFERED=1 \
     AGENTHUB_API_HOST=0.0.0.0 \
     AGENTHUB_API_PORT=8000
 
-RUN groupadd --gid 10001 agenthub \
-    && useradd --uid 10001 --gid agenthub --no-create-home --shell /usr/sbin/nologin agenthub
-
 WORKDIR /app
-COPY --from=builder --chown=10001:10001 /app /app
+COPY --from=builder --chown=65532:65532 /app /app
 
-USER 10001:10001
+USER 65532:65532
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
   CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2).read()"]
