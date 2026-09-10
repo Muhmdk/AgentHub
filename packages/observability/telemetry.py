@@ -8,7 +8,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import Lock
 from time import time
+from typing import Literal
 
+from azure.identity import DefaultAzureCredential
+from azure.monitor.opentelemetry.exporter import (
+    AzureMonitorMetricExporter,
+    AzureMonitorTraceExporter,
+)
 from opentelemetry import metrics, trace
 from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -35,9 +41,20 @@ class TelemetryConfig:
     service_version: str
     environment: str
     enabled: bool = False
+    exporter: Literal["otlp", "azure-monitor"] = "otlp"
     endpoint: str = "http://127.0.0.1:4318"
+    azure_monitor_connection_string: str | None = None
+    azure_managed_identity_client_id: str | None = None
     export_interval_ms: int = 5000
     max_queue_size: int = 256
+
+    def __post_init__(self) -> None:
+        if (
+            self.enabled
+            and self.exporter == "azure-monitor"
+            and not self.azure_monitor_connection_string
+        ):
+            raise ValueError("Azure Monitor connection string is required for Azure export")
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,12 +114,16 @@ class Telemetry:
         )
         self._tracer_provider: TracerProvider | None = None
         self._meter_provider: MeterProvider | None = None
+        self._azure_credential: DefaultAzureCredential | None = None
         if config.enabled or span_exporter is not None or metric_reader is not None:
             tracer_provider = TracerProvider(resource=resource)
-            exporter = span_exporter or OTLPSpanExporter(
-                endpoint=f"{config.endpoint.rstrip('/')}/v1/traces",
-                timeout=0.5,
-            )
+            if config.exporter == "azure-monitor" and (
+                span_exporter is None or metric_reader is None
+            ):
+                self._azure_credential = DefaultAzureCredential(
+                    managed_identity_client_id=config.azure_managed_identity_client_id
+                )
+            exporter = span_exporter or self._create_span_exporter(config)
             tracer_provider.add_span_processor(
                 BatchSpanProcessor(
                     exporter,
@@ -113,10 +134,7 @@ class Telemetry:
                 )
             )
             reader = metric_reader or PeriodicExportingMetricReader(
-                OTLPMetricExporter(
-                    endpoint=f"{config.endpoint.rstrip('/')}/v1/metrics",
-                    timeout=0.5,
-                ),
+                self._create_metric_exporter(config),
                 export_interval_millis=config.export_interval_ms,
                 export_timeout_millis=500,
             )
@@ -129,6 +147,32 @@ class Telemetry:
             self.tracer = trace.NoOpTracerProvider().get_tracer("agenthub")
             self.meter = metrics.NoOpMeterProvider().get_meter("agenthub")
         self._create_instruments(self.meter)
+
+    def _create_span_exporter(self, config: TelemetryConfig) -> SpanExporter:
+        if config.exporter == "azure-monitor":
+            return AzureMonitorTraceExporter(
+                connection_string=config.azure_monitor_connection_string,
+                credential=self._azure_credential,
+                disable_offline_storage=True,
+            )
+        return OTLPSpanExporter(
+            endpoint=f"{config.endpoint.rstrip('/')}/v1/traces",
+            timeout=0.5,
+        )
+
+    def _create_metric_exporter(
+        self, config: TelemetryConfig
+    ) -> AzureMonitorMetricExporter | OTLPMetricExporter:
+        if config.exporter == "azure-monitor":
+            return AzureMonitorMetricExporter(
+                connection_string=config.azure_monitor_connection_string,
+                credential=self._azure_credential,
+                disable_offline_storage=True,
+            )
+        return OTLPMetricExporter(
+            endpoint=f"{config.endpoint.rstrip('/')}/v1/metrics",
+            timeout=0.5,
+        )
 
     def _create_instruments(self, meter: Meter) -> None:
         self.http_requests = meter.create_counter("agenthub.http.requests", unit="{request}")
@@ -301,6 +345,15 @@ class Telemetry:
                 self._tracer_provider.shutdown()
         except Exception:
             logger.warning("telemetry_shutdown_failed", extra={"occurred_at": datetime.now(UTC)})
+        finally:
+            if self._azure_credential is not None:
+                try:
+                    self._azure_credential.close()
+                except Exception:
+                    logger.warning(
+                        "telemetry_credential_close_failed",
+                        extra={"occurred_at": datetime.now(UTC)},
+                    )
 
     def force_flush(self, timeout_millis: int = 1000) -> bool:
         """Flush providers for tests and local smoke checks without blocking indefinitely."""

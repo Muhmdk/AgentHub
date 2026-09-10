@@ -80,7 +80,10 @@ def create_app(
             service_version=app_settings.version,
             environment=app_settings.environment,
             enabled=app_settings.otel_enabled,
+            exporter=app_settings.otel_exporter,
             endpoint=app_settings.otel_endpoint,
+            azure_monitor_connection_string=app_settings.azure_monitor_connection_string,
+            azure_managed_identity_client_id=app_settings.azure_managed_identity_client_id,
             export_interval_ms=app_settings.otel_export_interval_ms,
             max_queue_size=app_settings.otel_max_queue_size,
         )

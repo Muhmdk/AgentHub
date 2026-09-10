@@ -108,7 +108,9 @@
         "azureSearchEndpoint",
         "azureSearchIndexName",
         "otelEnabled",
-        "otelEndpoint"
+        "otelExporter",
+        "otelEndpoint",
+        "azureMonitorConnectionStringSecretKey"
       ],
       "properties": {
         "environment": { "enum": ["local", "test", "staging", "production"] },
@@ -129,7 +131,9 @@
         "azureSearchEndpoint": { "type": "string" },
         "azureSearchIndexName": { "type": "string" },
         "otelEnabled": { "type": "boolean" },
-        "otelEndpoint": { "type": "string", "minLength": 1 }
+        "otelExporter": { "enum": ["otlp", "azure-monitor"] },
+        "otelEndpoint": { "type": "string", "minLength": 1 },
+        "azureMonitorConnectionStringSecretKey": { "type": "string", "minLength": 1 }
       }
     },
     "database": {

@@ -21,6 +21,7 @@ data:
   AGENTHUB_DATABASE_AUTH_MODE: {{ .Values.database.authMode | quote }}
   AGENTHUB_AZURE_POSTGRES_TOKEN_SCOPE: {{ .Values.database.azureTokenScope | quote }}
   AGENTHUB_OTEL_ENABLED: {{ .Values.runtime.otelEnabled | quote }}
+  AGENTHUB_OTEL_EXPORTER: {{ .Values.runtime.otelExporter | quote }}
   AGENTHUB_OTEL_ENDPOINT: {{ .Values.runtime.otelEndpoint | quote }}
   {{- with .Values.runtime.azureManagedIdentityClientId }}
   AGENTHUB_AZURE_MANAGED_IDENTITY_CLIENT_ID: {{ . | quote }}

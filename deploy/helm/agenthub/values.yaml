@@ -42,7 +42,9 @@ runtime:
   azureSearchEndpoint: ""
   azureSearchIndexName: ""
   otelEnabled: false
+  otelExporter: otlp
   otelEndpoint: http://otel-collector:4318
+  azureMonitorConnectionStringSecretKey: azure-monitor-connection-string # pragma: allowlist secret
 
 database:
   authMode: password

@@ -5,7 +5,7 @@ runtime:
   modelProvider: azure-openai
   retrievalProvider: azure-search
   otelEnabled: true
-  otelEndpoint: http://otel-collector.agenthub.svc.cluster.local:4318
+  otelExporter: azure-monitor
 
 database:
   authMode: azure-workload-identity
@@ -42,9 +42,13 @@ keyVault:
   objects:
     - objectName: database-url
       objectType: secret
+    - objectName: azure-monitor-connection-string # pragma: allowlist secret
+      objectType: secret
   secretObjects:
     - secretName: agenthub-runtime # pragma: allowlist secret
       type: Opaque
       data:
         - objectName: database-url
           key: database-url
+        - objectName: azure-monitor-connection-string # pragma: allowlist secret
+          key: azure-monitor-connection-string # pragma: allowlist secret

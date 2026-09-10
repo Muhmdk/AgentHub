@@ -62,7 +62,9 @@ class Settings(BaseSettings):
     rag_minimum_score: float = Field(default=0.15, ge=0.0, le=1.0)
     retrieval_timeout_seconds: float = Field(default=5.0, gt=0.0, le=120.0)
     otel_enabled: bool = False
+    otel_exporter: Literal["otlp", "azure-monitor"] = "otlp"
     otel_endpoint: str = Field(default="http://127.0.0.1:4318", min_length=1, max_length=500)
+    azure_monitor_connection_string: str | None = None
     otel_export_interval_ms: int = Field(default=5000, ge=100, le=60000)
     otel_max_queue_size: int = Field(default=256, ge=64, le=4096)
     observability_grafana_url: str = Field(
@@ -92,6 +94,12 @@ class Settings(BaseSettings):
             and not self.database_url.startswith("postgresql+psycopg://")
         ):
             raise ValueError("Azure PostgreSQL requires a psycopg SQLAlchemy URL")
+        if (
+            self.otel_enabled
+            and self.otel_exporter == "azure-monitor"
+            and not self.azure_monitor_connection_string
+        ):
+            raise ValueError("Azure Monitor connection string is required")
         return self
 
 

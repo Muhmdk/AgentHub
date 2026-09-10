@@ -88,6 +88,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "agenthub.databaseSecretName" . }}
                   key: {{ .Values.database.secretKey }}
+            {{- if eq .Values.runtime.otelExporter "azure-monitor" }}
+            - name: AGENTHUB_AZURE_MONITOR_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agenthub.databaseSecretName" . }}
+                  key: {{ .Values.runtime.azureMonitorConnectionStringSecretKey }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

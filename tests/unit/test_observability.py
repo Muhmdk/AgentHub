@@ -164,3 +164,61 @@ def test_exporter_failure_does_not_fail_or_expand_an_agent_request() -> None:
 
     assert response.status_code == 200
     assert len(telemetry.observations.snapshot()) == 4
+
+
+@pytest.mark.unit
+def test_azure_monitor_exporter_uses_managed_identity_and_disables_disk_storage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credential_instances: list[object] = []
+    exporter_options: list[dict[str, object]] = []
+
+    class OfflineCredential:
+        def __init__(self, *, managed_identity_client_id: str | None) -> None:
+            self.client_id = managed_identity_client_id
+            self.closed = False
+            credential_instances.append(self)
+
+        def close(self) -> None:
+            self.closed = True
+
+    def trace_exporter(**options: object) -> InMemorySpanExporter:
+        exporter_options.append(options)
+        return InMemorySpanExporter()
+
+    monkeypatch.setattr(
+        "packages.observability.telemetry.DefaultAzureCredential", OfflineCredential
+    )
+    monkeypatch.setattr(
+        "packages.observability.telemetry.AzureMonitorTraceExporter", trace_exporter
+    )
+    connection_string = (
+        "InstrumentationKey=00000000-0000-0000-0000-000000000005;"
+        "IngestionEndpoint=https://canadacentral-0.in.applicationinsights.azure.com/"
+    )
+    telemetry = Telemetry(
+        TelemetryConfig(
+            "agenthub-api",
+            "test",
+            "staging",
+            enabled=True,
+            exporter="azure-monitor",
+            azure_monitor_connection_string=connection_string,
+            azure_managed_identity_client_id="workload-client-id",
+        ),
+        metric_reader=InMemoryMetricReader(),
+    )
+
+    telemetry.shutdown()
+
+    credential = credential_instances[0]
+    assert isinstance(credential, OfflineCredential)
+    assert credential.client_id == "workload-client-id"
+    assert credential.closed
+    assert exporter_options == [
+        {
+            "connection_string": connection_string,
+            "credential": credential,
+            "disable_offline_storage": True,
+        }
+    ]

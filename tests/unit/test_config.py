@@ -64,6 +64,23 @@ def test_azure_database_authentication_requires_psycopg_url() -> None:
 
 
 @pytest.mark.unit
+def test_azure_monitor_export_requires_connection_coordinates() -> None:
+    with pytest.raises(ValidationError, match="Azure Monitor connection string is required"):
+        Settings(otel_enabled=True, otel_exporter="azure-monitor", _env_file=None)
+
+    settings = Settings(
+        otel_enabled=True,
+        otel_exporter="azure-monitor",
+        azure_monitor_connection_string=(
+            "InstrumentationKey=00000000-0000-0000-0000-000000000005;"
+            "IngestionEndpoint=https://canadacentral-0.in.applicationinsights.azure.com/"
+        ),
+        _env_file=None,
+    )
+    assert settings.otel_exporter == "azure-monitor"
+
+
+@pytest.mark.unit
 def test_settings_load_prefixed_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AGENTHUB_ENVIRONMENT", "test")
     monkeypatch.setenv("AGENTHUB_API_PORT", "9000")
