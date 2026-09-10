@@ -1,10 +1,11 @@
 """Typed application configuration loaded from the environment."""
 
+import re
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
 from typing import Literal, Self
 
-from pydantic import Field, ValidationError, model_validator
+from pydantic import Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from agents.shared.azure import (
@@ -12,6 +13,8 @@ from agents.shared.azure import (
     AZURE_SEARCH_API_VERSION,
     AZURE_SEARCH_SCOPE,
 )
+
+_SERVICE_IDENTITY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{1,127}$")
 
 
 def installed_version() -> str:
@@ -37,6 +40,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     api_host: str = Field(default="127.0.0.1", min_length=1)
     api_port: int = Field(default=8000, ge=1, le=65535)
+    gateway_service_tokens: dict[str, SecretStr] = Field(default_factory=dict)
     model_provider: Literal["fake", "azure-openai"] = "fake"
     retrieval_provider: Literal["local", "azure-search"] = "local"
     azure_managed_identity_client_id: str | None = None
@@ -81,6 +85,18 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_selected_providers(self) -> Self:
         """Require Azure coordinates only when a network provider is selected."""
+        token_values: set[str] = set()
+        for identity, token in self.gateway_service_tokens.items():
+            if not _SERVICE_IDENTITY_PATTERN.fullmatch(identity) or identity.startswith("local/"):
+                raise ValueError("Gateway service identities must be non-local")
+            token_value = token.get_secret_value()
+            if len(token_value) < 32:
+                raise ValueError("Gateway service tokens must contain at least 32 characters")
+            if token_value in token_values:
+                raise ValueError("Gateway service tokens must be unique per identity")
+            token_values.add(token_value)
+        if self.environment in {"staging", "production"} and not self.gateway_service_tokens:
+            raise ValueError("Gateway service credentials are required outside local and test")
         if self.model_provider == "azure-openai" and (
             not self.azure_openai_endpoint or not self.azure_openai_deployment
         ):

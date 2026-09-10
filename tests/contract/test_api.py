@@ -8,6 +8,8 @@ from apps.api.config import Settings
 from apps.api.main import create_app
 from packages.registry.database import Database
 
+_GATEWAY_TOKEN = "gateway-contract-token-with-at-least-32-characters"
+
 
 class UnreadyDatabase(Database):
     def __init__(self) -> None:
@@ -160,6 +162,88 @@ def test_inventory_invocation_returns_answer_and_evidence(client: TestClient) ->
         "weather.read",
     ]
     assert len(body["citations"]) == 6
+
+
+@pytest.mark.contract
+def test_gateway_requires_an_explicit_caller_identity(client: TestClient) -> None:
+    response = client.post(
+        "/gateway/agents/inventory-agent/invoke",
+        json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+        headers={"X-Correlation-ID": "gateway-no-identity"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.json() == {
+        "error": {
+            "code": "authentication_required",
+            "message": "Gateway authentication required",
+            "correlation_id": "gateway-no-identity",
+            "details": [],
+        }
+    }
+
+
+@pytest.mark.contract
+def test_gateway_invokes_agent_for_explicit_local_identity(client: TestClient) -> None:
+    response = client.post(
+        "/gateway/agents/knowledge-agent/invoke",
+        json={"query": "Can I return an unopened product after 20 days?", "seed": 4},
+        headers={
+            "X-AgentHub-Identity": "local/contract-test",
+            "X-Correlation-ID": "gateway-local",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"].startswith("Unopened products may be returned within 30 days")
+    assert response.json()["retrieval"]["corpus_version"] == "v1"
+
+
+@pytest.mark.contract
+def test_gateway_rejects_unknown_agent_after_authentication(client: TestClient) -> None:
+    response = client.post(
+        "/gateway/agents/unknown-agent/invoke",
+        json={"query": "Do something"},
+        headers={"X-AgentHub-Identity": "local/contract-test"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["message"] == "Agent is not available"
+
+
+@pytest.mark.contract
+def test_production_exposes_only_authenticated_gateway_invocation() -> None:
+    app = create_app(
+        Settings(
+            environment="production",
+            gateway_service_tokens={"service/runtime": _GATEWAY_TOKEN},
+            _env_file=None,
+        )
+    )
+
+    with TestClient(app, raise_server_exceptions=False) as production_client:
+        direct = production_client.post(
+            "/agents/inventory/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+        )
+        denied = production_client.post(
+            "/gateway/agents/inventory-agent/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+            headers={"X-AgentHub-Identity": "local/contract-test"},
+        )
+        allowed = production_client.post(
+            "/gateway/agents/inventory-agent/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+            headers={
+                "Authorization": f"Bearer {_GATEWAY_TOKEN}",
+                "X-AgentHub-Identity": "service/runtime",
+            },
+        )
+
+    assert direct.status_code == 404
+    assert denied.status_code == 401
+    assert allowed.status_code == 200
 
 
 @pytest.mark.contract

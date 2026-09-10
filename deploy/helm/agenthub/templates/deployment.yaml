@@ -95,6 +95,13 @@ spec:
                   name: {{ include "agenthub.databaseSecretName" . }}
                   key: {{ .Values.runtime.azureMonitorConnectionStringSecretKey }}
             {{- end }}
+            {{- if or (eq .Values.runtime.environment "staging") (eq .Values.runtime.environment "production") }}
+            - name: AGENTHUB_GATEWAY_SERVICE_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "agenthub.databaseSecretName" . }}
+                  key: {{ .Values.runtime.gatewayServiceTokensSecretKey }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

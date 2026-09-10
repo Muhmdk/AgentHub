@@ -110,7 +110,8 @@
         "otelEnabled",
         "otelExporter",
         "otelEndpoint",
-        "azureMonitorConnectionStringSecretKey"
+        "azureMonitorConnectionStringSecretKey",
+        "gatewayServiceTokensSecretKey"
       ],
       "properties": {
         "environment": { "enum": ["local", "test", "staging", "production"] },
@@ -133,7 +134,8 @@
         "otelEnabled": { "type": "boolean" },
         "otelExporter": { "enum": ["otlp", "azure-monitor"] },
         "otelEndpoint": { "type": "string", "minLength": 1 },
-        "azureMonitorConnectionStringSecretKey": { "type": "string", "minLength": 1 }
+        "azureMonitorConnectionStringSecretKey": { "type": "string", "minLength": 1 },
+        "gatewayServiceTokensSecretKey": { "type": "string", "minLength": 1 }
       }
     },
     "database": {

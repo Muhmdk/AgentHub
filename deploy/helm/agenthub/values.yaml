@@ -45,6 +45,7 @@ runtime:
   otelExporter: otlp
   otelEndpoint: http://otel-collector:4318
   azureMonitorConnectionStringSecretKey: azure-monitor-connection-string # pragma: allowlist secret
+  gatewayServiceTokensSecretKey: gateway-service-tokens # pragma: allowlist secret
 
 database:
   authMode: password

@@ -20,6 +20,7 @@ from apps.api.config import Settings, load_settings
 from apps.api.errors import register_error_handlers
 from apps.api.logging import configure_logging
 from apps.api.middleware import correlation_middleware
+from apps.gateway import GatewayAuthenticator, create_gateway_router
 from apps.web import evaluation_page_path, observability_page_path, registry_page_path
 from packages.contracts.evaluation import (
     EvaluationRunReport,
@@ -179,6 +180,23 @@ def create_app(
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
 
+    gateway_authenticator = GatewayAuthenticator(
+        environment=app_settings.environment,
+        service_tokens=app_settings.gateway_service_tokens,
+    )
+    app.state.gateway_authenticator = gateway_authenticator
+    app.include_router(
+        create_gateway_router(
+            authenticator=gateway_authenticator,
+            targets={
+                "inventory-agent": inventory,
+                "knowledge-agent": knowledge,
+                "shopping-agent": shopping,
+            },
+            telemetry=telemetry,
+        )
+    )
+
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     async def liveness() -> HealthResponse:
         return HealthResponse(status="ok", service=app_settings.service_name)
@@ -202,29 +220,34 @@ def create_app(
             environment=app_settings.environment,
         )
 
-    @app.post(
-        "/agents/inventory/invoke",
-        response_model=AgentResponse,
-        tags=["agents"],
-    )
-    async def invoke_inventory(request: AgentRequest) -> AgentResponse:
-        return await inventory.invoke(request)
+    if app_settings.environment in {"local", "test"}:
 
-    @app.post(
-        "/agents/knowledge/invoke",
-        response_model=GroundedAgentResponse,
-        tags=["agents"],
-    )
-    async def invoke_knowledge(request: AgentRequest) -> GroundedAgentResponse:
-        return await knowledge.invoke(request)
+        @app.post(
+            "/agents/inventory/invoke",
+            response_model=AgentResponse,
+            tags=["agents"],
+            deprecated=True,
+        )
+        async def invoke_inventory(request: AgentRequest) -> AgentResponse:
+            return await inventory.invoke(request)
 
-    @app.post(
-        "/agents/shopping/invoke",
-        response_model=GroundedAgentResponse,
-        tags=["agents"],
-    )
-    async def invoke_shopping(request: AgentRequest) -> GroundedAgentResponse:
-        return await shopping.invoke(request)
+        @app.post(
+            "/agents/knowledge/invoke",
+            response_model=GroundedAgentResponse,
+            tags=["agents"],
+            deprecated=True,
+        )
+        async def invoke_knowledge(request: AgentRequest) -> GroundedAgentResponse:
+            return await knowledge.invoke(request)
+
+        @app.post(
+            "/agents/shopping/invoke",
+            response_model=GroundedAgentResponse,
+            tags=["agents"],
+            deprecated=True,
+        )
+        async def invoke_shopping(request: AgentRequest) -> GroundedAgentResponse:
+            return await shopping.invoke(request)
 
     @app.post(
         "/registry/agents",

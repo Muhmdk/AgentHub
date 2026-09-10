@@ -40,6 +40,7 @@ jobs:
           BASE_URL: ${{ inputs.base_url }}
           EXPECTED_MODEL_PREFIX: ${{ inputs.expected_model_prefix }}
           AGENTHUB_SMOKE_BEARER_TOKEN: ${{ secrets.AGENTHUB_SMOKE_BEARER_TOKEN }}
+          AGENTHUB_SMOKE_IDENTITY: service/deployment-smoke
         run: |
           .venv/bin/python scripts/smoke_deployment.py \
             --base-url "$BASE_URL" \

@@ -44,6 +44,8 @@ keyVault:
       objectType: secret
     - objectName: azure-monitor-connection-string # pragma: allowlist secret
       objectType: secret
+    - objectName: gateway-service-tokens # pragma: allowlist secret
+      objectType: secret
   secretObjects:
     - secretName: agenthub-runtime # pragma: allowlist secret
       type: Opaque
@@ -52,3 +54,5 @@ keyVault:
           key: database-url
         - objectName: azure-monitor-connection-string # pragma: allowlist secret
           key: azure-monitor-connection-string # pragma: allowlist secret
+        - objectName: gateway-service-tokens # pragma: allowlist secret
+          key: gateway-service-tokens # pragma: allowlist secret
