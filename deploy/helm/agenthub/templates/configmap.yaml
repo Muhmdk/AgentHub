@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agenthub.fullname" . }}-runtime
+  labels:
+    {{- include "agenthub.labels" . | nindent 4 }}
+data:
+  AGENTHUB_ENVIRONMENT: {{ .Values.runtime.environment | quote }}
+  AGENTHUB_LOG_LEVEL: {{ .Values.runtime.logLevel | quote }}
+  AGENTHUB_API_HOST: "0.0.0.0"
+  AGENTHUB_API_PORT: {{ .Values.service.targetPort | quote }}
+  AGENTHUB_MODEL_PROVIDER: {{ .Values.runtime.modelProvider | quote }}
+  AGENTHUB_RETRIEVAL_PROVIDER: {{ .Values.runtime.retrievalProvider | quote }}
+  AGENTHUB_AGENT_MAX_STEPS: {{ .Values.runtime.agentMaxSteps | quote }}
+  AGENTHUB_TOOL_TIMEOUT_SECONDS: {{ .Values.runtime.toolTimeoutSeconds | quote }}
+  AGENTHUB_AGENT_TIMEOUT_SECONDS: {{ .Values.runtime.agentTimeoutSeconds | quote }}
+  AGENTHUB_RAG_TOP_K: {{ .Values.runtime.ragTopK | quote }}
+  AGENTHUB_RAG_MINIMUM_SCORE: {{ .Values.runtime.ragMinimumScore | quote }}
+  AGENTHUB_RETRIEVAL_TIMEOUT_SECONDS: {{ .Values.runtime.retrievalTimeoutSeconds | quote }}
+  AGENTHUB_AZURE_REQUEST_TIMEOUT_SECONDS: {{ .Values.runtime.azureRequestTimeoutSeconds | quote }}
+  AGENTHUB_OTEL_ENABLED: {{ .Values.runtime.otelEnabled | quote }}
+  AGENTHUB_OTEL_ENDPOINT: {{ .Values.runtime.otelEndpoint | quote }}
+  {{- with .Values.runtime.azureManagedIdentityClientId }}
+  AGENTHUB_AZURE_MANAGED_IDENTITY_CLIENT_ID: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.runtime.azureOpenAIEndpoint }}
+  AGENTHUB_AZURE_OPENAI_ENDPOINT: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.runtime.azureOpenAIDeployment }}
+  AGENTHUB_AZURE_OPENAI_DEPLOYMENT: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.runtime.azureSearchEndpoint }}
+  AGENTHUB_AZURE_SEARCH_ENDPOINT: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.runtime.azureSearchIndexName }}
+  AGENTHUB_AZURE_SEARCH_INDEX_NAME: {{ . | quote }}
+  {{- end }}

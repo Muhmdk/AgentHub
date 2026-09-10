@@ -1,0 +1,11 @@
+runtime:
+  environment: local
+  modelProvider: fake
+  retrievalProvider: local
+  otelEnabled: false
+
+database:
+  createSecret: true
+
+migrations:
+  enabled: true

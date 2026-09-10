@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "replicaCount": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 1 },
+        "digest": { "type": "string", "pattern": "^$|^sha256:[a-f0-9]{64}$" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": { "name": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "name", "annotations", "labels"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" },
+        "annotations": { "type": "object", "additionalProperties": { "type": "string" } },
+        "labels": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "port", "targetPort"],
+      "properties": {
+        "type": { "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "targetPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "logLevel",
+        "modelProvider",
+        "retrievalProvider",
+        "agentMaxSteps",
+        "toolTimeoutSeconds",
+        "agentTimeoutSeconds",
+        "ragTopK",
+        "ragMinimumScore",
+        "retrievalTimeoutSeconds",
+        "azureRequestTimeoutSeconds",
+        "azureManagedIdentityClientId",
+        "azureOpenAIEndpoint",
+        "azureOpenAIDeployment",
+        "azureSearchEndpoint",
+        "azureSearchIndexName",
+        "otelEnabled",
+        "otelEndpoint"
+      ],
+      "properties": {
+        "environment": { "enum": ["local", "test", "staging", "production"] },
+        "logLevel": { "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] },
+        "modelProvider": { "enum": ["fake", "azure-openai"] },
+        "retrievalProvider": { "enum": ["local", "azure-search"] },
+        "agentMaxSteps": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "toolTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "agentTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "ragTopK": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "ragMinimumScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "retrievalTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "azureRequestTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "azureManagedIdentityClientId": { "type": "string" },
+        "azureOpenAIEndpoint": { "type": "string" },
+        "azureOpenAIDeployment": { "type": "string" },
+        "azureSearchEndpoint": { "type": "string" },
+        "azureSearchIndexName": { "type": "string" },
+        "otelEnabled": { "type": "boolean" },
+        "otelEndpoint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["createSecret", "url", "existingSecret", "secretKey"],
+      "properties": {
+        "createSecret": { "type": "boolean" },
+        "url": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "secretKey": { "type": "string", "minLength": 1 }
+      }
+    },
+    "migrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "backoffLimit"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "backoffLimit": { "type": "integer", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "podAnnotations": { "type": "object", "additionalProperties": { "type": "string" } },
+    "podLabels": { "type": "object", "additionalProperties": { "type": "string" } },
+    "extraEnv": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

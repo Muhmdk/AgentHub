@@ -1,0 +1,58 @@
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: agenthub
+  tag: 0.3.0-dev
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  labels: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+runtime:
+  environment: local
+  logLevel: INFO
+  modelProvider: fake
+  retrievalProvider: local
+  agentMaxSteps: 3
+  toolTimeoutSeconds: 1.0
+  agentTimeoutSeconds: 5.0
+  ragTopK: 3
+  ragMinimumScore: 0.15
+  retrievalTimeoutSeconds: 5.0
+  azureRequestTimeoutSeconds: 10.0
+  azureManagedIdentityClientId: ""
+  azureOpenAIEndpoint: ""
+  azureOpenAIDeployment: ""
+  azureSearchEndpoint: ""
+  azureSearchIndexName: ""
+  otelEnabled: false
+  otelEndpoint: http://otel-collector:4318
+
+database:
+  createSecret: true
+  url: postgresql+psycopg://agenthub:agenthub@postgres:5432/agenthub # pragma: allowlist secret
+  existingSecret: ""
+  secretKey: database-url # pragma: allowlist secret
+
+migrations:
+  enabled: true
+  backoffLimit: 3
+
+podAnnotations: {}
+podLabels: {}
+
+extraEnv: []

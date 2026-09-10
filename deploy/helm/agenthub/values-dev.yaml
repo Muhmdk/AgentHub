@@ -1,0 +1,15 @@
+runtime:
+  environment: staging
+  modelProvider: azure-openai
+  retrievalProvider: azure-search
+  otelEnabled: true
+  otelEndpoint: http://otel-collector.agenthub.svc.cluster.local:4318
+
+database:
+  createSecret: false
+  url: ""
+  existingSecret: agenthub-runtime # pragma: allowlist secret
+  secretKey: database-url # pragma: allowlist secret
+
+migrations:
+  enabled: true
