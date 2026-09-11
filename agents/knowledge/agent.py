@@ -54,6 +54,7 @@ class KnowledgeAgent:
         attributes = {
             Attribute.AGENT_NAME: "knowledge-agent",
             Attribute.AGENT_VERSION: "1.0.0",
+            Attribute.TEAM: "retail-ai-team",
             Attribute.PROMPT_VERSION: "1.0.0",
             Attribute.MODEL_PROVIDER: self._model.name.split("/", 1)[0],
             Attribute.MODEL_DEPLOYMENT: self._model.name,

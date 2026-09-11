@@ -12,6 +12,7 @@ class Attribute(StrEnum):
     HTTP_STATUS_CODE = "http.response.status_code"
     AGENT_NAME = "agent.name"
     AGENT_VERSION = "agent.version"
+    TEAM = "team.name"
     PROMPT_VERSION = "prompt.version"
     MODEL_PROVIDER = "model.provider"
     MODEL_DEPLOYMENT = "model.deployment"
@@ -40,6 +41,8 @@ METRIC_ATTRIBUTE_ALLOWLIST = frozenset(
         Attribute.HTTP_STATUS_CODE,
         Attribute.AGENT_NAME,
         Attribute.AGENT_VERSION,
+        Attribute.DEPLOYMENT_ENVIRONMENT,
+        Attribute.TEAM,
         Attribute.MODEL_PROVIDER,
         Attribute.MODEL_DEPLOYMENT,
         Attribute.TOKEN_TYPE,
