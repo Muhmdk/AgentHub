@@ -7,6 +7,7 @@ from packages.delivery.repository import (
     DeliveryRepository,
     DeliveryStore,
 )
+from packages.delivery.routing import DeterministicRouter
 
 __all__ = [
     "DeliveryBlockedError",
@@ -14,4 +15,5 @@ __all__ = [
     "DeliveryNotFoundError",
     "DeliveryRepository",
     "DeliveryStore",
+    "DeterministicRouter",
 ]

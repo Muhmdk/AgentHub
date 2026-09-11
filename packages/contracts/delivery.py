@@ -20,6 +20,13 @@ class DeliveryEnvironment(StrEnum):
     PRODUCTION = "production"
 
 
+class RouteLane(StrEnum):
+    """The stable or candidate side selected for a request."""
+
+    STABLE = "stable"
+    CANDIDATE = "candidate"
+
+
 class RouteTarget(BaseModel):
     """Immutable release identity selected by a route."""
 
@@ -135,3 +142,17 @@ class TrafficRouteEvent(BaseModel):
     previous_allocation: TrafficAllocation | None
     new_allocation: TrafficAllocation
     occurred_at: datetime
+
+
+class RouteDecision(BaseModel):
+    """Explainable deterministic selection without retaining the raw routing key."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    route_id: UUID
+    route_revision: int = Field(ge=1)
+    assignment_hash: Sha256
+    cohort_basis_point: int = Field(ge=0, lt=10_000)
+    lane: RouteLane
+    target: RouteTarget
+    reason: str = Field(min_length=3, max_length=300)
