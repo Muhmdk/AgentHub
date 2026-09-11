@@ -7,9 +7,10 @@ is being delivered in twelve independently reviewable phases described in
 
 ## Current status
 
-Phases 00 through 08 provide the local development foundation, three bounded demonstration
+Phases 00 through 10 provide the local development foundation, three bounded demonstration
 agents, an immutable registry, reproducible evaluations, an observability/SLO plane, and an
-immutable CI/CD release path with an authenticated governance gateway.
+immutable CI/CD release path with an authenticated governance gateway, progressive delivery, and
+evidence-grounded incident recovery.
 The repository currently includes:
 
 - FastAPI liveness, readiness, and version endpoints;
@@ -41,13 +42,15 @@ The repository currently includes:
 - versioned OPA/Rego rules for scopes, environments, risk approvals, models, tokens, and PII;
 - deterministic pre-provider PII redaction plus per-agent/model rate, token, and cost controls;
 - append-only sanitized governance decisions and an operator policy/audit console;
+- shadow comparison, guarded canary stages, atomic traffic routing, and cost-aware model selection;
+- typed incident triggers with content-addressed evidence and normalized timelines;
+- deterministic correlation plus a citation-validated, read-only LangGraph investigator;
+- policy-bound, idempotent known-good rollback with cooldowns and bounded attempts;
+- fixed-window recovery verification, failed-recovery escalation, and an incident console;
 - synthetic store, SKU, inventory, sales, promotion, and weather evidence;
 - unit, contract, and process-level smoke tests;
 - linting, formatting, strict typing, coverage, secret scanning, and dependency auditing;
 - least-privilege, SHA-pinned GitHub Actions workflows.
-
-Progressive delivery and incident automation are planned for later phases and are not represented
-as implemented here.
 
 ## Prerequisites
 
@@ -126,7 +129,9 @@ Stop the foreground server with `Ctrl-C`. Interactive API documentation is avail
 `http://127.0.0.1:8000/registry`; evaluation comparison is at
 `http://127.0.0.1:8000/evaluations`; fleet health is at
 `http://127.0.0.1:8000/observability`; governance policy and audit history are at
-`http://127.0.0.1:8000/governance`. Run `make down` when local services are no longer needed.
+`http://127.0.0.1:8000/governance`; progressive delivery is at
+`http://127.0.0.1:8000/delivery`; incident investigation and recovery are at
+`http://127.0.0.1:8000/incidents-console`. Run `make down` when local services are no longer needed.
 
 For local traces, metrics, dashboards, SLOs, alerts, and runbooks, see the
 [observability guide](docs/observability.md).
@@ -208,6 +213,11 @@ cannot leave `evaluated`. See the [release pipeline guide](docs/releases.md) and
 | `GET /observability/agents/{name}` | Reports one agent's observability detail | `200` |
 | `GET /governance/policy` | Reports the safe active policy, agent grants, and budget posture | `200` |
 | `GET /governance/audit` | Lists bounded, filterable, sanitized policy and enforcement events | `200` |
+| `POST /incidents/signals` | Evaluates a typed operational signal and opens a breached incident | `200` |
+| `GET /incidents` | Lists persisted incidents, optionally filtered by agent | `200` |
+| `POST /incidents/{id}/evidence` | Appends one content-addressed evidence item | `200` |
+| `GET /incidents/{id}/investigation` | Returns timeline, cited findings, and rollback state | `200` |
+| `POST /incidents/{id}/rollback` | Evaluates policy and requests the immutable known-good path | `200` |
 
 Clients may provide `X-Correlation-ID` using letters, numbers, `.`, `_`, `:`, or `-`, up
 to 128 characters. AgentHub returns the accepted ID in the response. Missing or unsafe
@@ -301,6 +311,7 @@ submitted value is deliberately omitted so a mistaken secret cannot be echoed.
 | `make demo-inventory` | Run the deterministic Inventory Agent CLI |
 | `make demo-knowledge` | Run the grounded Knowledge Agent CLI |
 | `make demo-shopping` | Run the grounded Shopping Agent CLI |
+| `make demo-incident-fault` | Print the deterministic top-k 5→50 incident drill payload |
 | `make ingest-corpus` | Validate ingestion and verify unchanged chunks are not duplicated |
 | `make benchmark-rag` | Print the versioned known-answer retrieval report |
 | `make evaluate` | Evaluate the Inventory Agent and emit an immutable JSON report |
@@ -333,6 +344,8 @@ determinism is recorded in [ADR 0005](docs/adr/0005-deterministic-evaluation-gat
 
 The [governance guide](docs/governance.md) documents the gateway, decision contract, runtime
 controls, append-only audit schema, failure behavior, and emergency recovery boundary.
+The [incident recovery runbook](docs/runbooks/incident-recovery.md) documents evidence standards,
+automatic and manual rollback boundaries, fixed-window verification, and escalation.
 
 ## Repository layout
 
