@@ -111,7 +111,9 @@
         "otelExporter",
         "otelEndpoint",
         "azureMonitorConnectionStringSecretKey",
-        "gatewayServiceTokensSecretKey"
+        "gatewayServiceTokensSecretKey",
+        "policyEngineUrl",
+        "policyTimeoutSeconds"
       ],
       "properties": {
         "environment": { "enum": ["local", "test", "staging", "production"] },
@@ -135,7 +137,29 @@
         "otelExporter": { "enum": ["otlp", "azure-monitor"] },
         "otelEndpoint": { "type": "string", "minLength": 1 },
         "azureMonitorConnectionStringSecretKey": { "type": "string", "minLength": 1 },
-        "gatewayServiceTokensSecretKey": { "type": "string", "minLength": 1 }
+        "gatewayServiceTokensSecretKey": { "type": "string", "minLength": 1 },
+        "policyEngineUrl": { "type": "string", "pattern": "^$|^https?://" },
+        "policyTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "image", "port", "resources"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "digest", "pullPolicy"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+          }
+        },
+        "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "resources": { "$ref": "#/definitions/resourceRequirements" }
       }
     },
     "database": {

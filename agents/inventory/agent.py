@@ -284,6 +284,8 @@ class InventoryAgent:
         try:
             with self._telemetry.span("model.generate", attributes):
                 model_response = await self._model.generate(request)
+        except AgentExecutionError:
+            raise
         except Exception as exc:
             raise AgentExecutionError(
                 AgentErrorCode.MODEL_ERROR,

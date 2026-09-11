@@ -164,6 +164,8 @@ class KnowledgeAgent:
                         seed=seed,
                     )
                 )
+        except AgentExecutionError:
+            raise
         except Exception as exc:
             raise AgentExecutionError(
                 AgentErrorCode.MODEL_ERROR,

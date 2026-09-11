@@ -5,8 +5,10 @@ from typing import Annotated, Protocol
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from apps.gateway.identity import CallerIdentity, GatewayAuthenticationError, GatewayAuthenticator
+from packages.contracts.governance import PolicySubject
 from packages.contracts.retrieval import GroundedAgentResponse
 from packages.contracts.runtime import AgentRequest, AgentResponse
+from packages.governance import RuntimePolicyContext, bind_policy_context
 from packages.observability.conventions import Attribute
 from packages.observability.telemetry import Telemetry
 
@@ -58,13 +60,27 @@ def create_gateway_router(
         target = targets.get(agent_name)
         if target is None:
             raise HTTPException(status_code=404, detail="Agent is not available")
-        with telemetry.span(
-            "gateway.request",
-            {
-                Attribute.AGENT_NAME: agent_name,
-                Attribute.CORRELATION_ID: request.state.correlation_id,
-                Attribute.RELEASE_ID: request.state.release_id,
-            },
+        with (
+            telemetry.span(
+                "gateway.request",
+                {
+                    Attribute.AGENT_NAME: agent_name,
+                    Attribute.CORRELATION_ID: request.state.correlation_id,
+                    Attribute.RELEASE_ID: request.state.release_id,
+                },
+            ),
+            bind_policy_context(
+                RuntimePolicyContext(
+                    subject=PolicySubject(
+                        identity=_caller.subject,
+                        kind="human" if _caller.method == "local-explicit" else "service",
+                        authentication_method=_caller.method,
+                        roles=["gateway-invoker"],
+                    ),
+                    correlation_id=request.state.correlation_id,
+                    release_id=request.state.release_id,
+                )
+            ),
         ):
             response = await target.invoke(agent_request)
         return response

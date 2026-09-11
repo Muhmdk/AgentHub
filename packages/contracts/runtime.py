@@ -135,6 +135,8 @@ class AgentErrorCode(StrEnum):
     MODEL_ERROR = "model_error"
     RETRIEVAL_ERROR = "retrieval_error"
     RETRIEVAL_TIMEOUT = "retrieval_timeout"
+    POLICY_DENIED = "policy_denied"
+    POLICY_UNAVAILABLE = "policy_unavailable"
 
 
 class ToolErrorCode(StrEnum):

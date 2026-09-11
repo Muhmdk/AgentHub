@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
+from agents.inventory.tools import default_inventory_tools
 from agents.knowledge.agent import KnowledgeAgent
 from agents.shared.providers import create_database, create_provider_bundle
 from agents.shopping.agent import ShoppingAgent
@@ -50,6 +51,15 @@ from packages.contracts.retrieval import GroundedAgentResponse
 from packages.contracts.runtime import AgentRequest, AgentResponse
 from packages.evaluation.repository import EvaluationRepository, EvaluationStore
 from packages.evaluation.service import EvaluationService
+from packages.governance import (
+    AuthorizedChatModel,
+    AuthorizedTool,
+    LocalPolicyEngine,
+    OPAHttpPolicyEngine,
+    PolicyAuthorizer,
+    PolicyEngine,
+    agent_policy_profiles,
+)
 from packages.observability.conventions import Attribute
 from packages.observability.slos import fleet_health
 from packages.observability.telemetry import Telemetry, TelemetryConfig
@@ -71,6 +81,7 @@ def create_app(
     evaluation_store: EvaluationStore | None = None,
     release_store: ReleaseStore | None = None,
     telemetry_instance: Telemetry | None = None,
+    policy_engine: PolicyEngine | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
     app_settings = settings or load_settings()
@@ -91,9 +102,49 @@ def create_app(
     )
     providers = create_provider_bundle(app_settings)
     model = providers.model
+    active_policy_engine = policy_engine
+    if active_policy_engine is None:
+        if app_settings.policy_engine_url is not None:
+            active_policy_engine = OPAHttpPolicyEngine(
+                app_settings.policy_engine_url,
+                app_settings.policy_timeout_seconds,
+            )
+        else:
+            active_policy_engine = LocalPolicyEngine()
+    profiles = agent_policy_profiles(model.name)
+    inventory_authorizer = PolicyAuthorizer(
+        active_policy_engine,
+        profiles["inventory-agent"],
+        app_settings.environment,
+    )
+    knowledge_authorizer = PolicyAuthorizer(
+        active_policy_engine,
+        profiles["knowledge-agent"],
+        app_settings.environment,
+    )
+    shopping_authorizer = PolicyAuthorizer(
+        active_policy_engine,
+        profiles["shopping-agent"],
+        app_settings.environment,
+    )
+    retail_data = RetailData.load()
+    inventory_tools = default_inventory_tools(retail_data)
     inventory = inventory_agent or InventoryAgent(
-        data=RetailData.load(),
-        model=model,
+        data=retail_data,
+        model=AuthorizedChatModel(model, inventory_authorizer),
+        tools={
+            name: AuthorizedTool(
+                tool,
+                definition=tool.definition,
+                authorizer=inventory_authorizer,
+                required_scopes=next(
+                    grant.scopes
+                    for grant in profiles["inventory-agent"].tools
+                    if grant.name == name
+                ),
+            )
+            for name, tool in inventory_tools.items()
+        },
         max_steps=app_settings.agent_max_steps,
         tool_timeout_seconds=app_settings.tool_timeout_seconds,
         execution_timeout_seconds=app_settings.agent_timeout_seconds,
@@ -104,15 +155,20 @@ def create_app(
     knowledge = knowledge_agent or KnowledgeAgent(
         retriever=retriever,
         corpus=corpus,
-        model=model,
+        model=AuthorizedChatModel(model, knowledge_authorizer),
         top_k=app_settings.rag_top_k,
         minimum_score=app_settings.rag_minimum_score,
         timeout_seconds=app_settings.retrieval_timeout_seconds,
         telemetry=telemetry,
     )
     shopping = shopping_agent or ShoppingAgent(
-        product_tool=ProductSearchTool(retriever, corpus),
-        model=model,
+        product_tool=AuthorizedTool(
+            ProductSearchTool(retriever, corpus),
+            definition=ProductSearchTool.definition,
+            authorizer=shopping_authorizer,
+            required_scopes=["catalog:read"],
+        ),
+        model=AuthorizedChatModel(model, shopping_authorizer),
         timeout_seconds=app_settings.agent_timeout_seconds,
         telemetry=telemetry,
     )
@@ -177,6 +233,7 @@ def create_app(
     app.state.evaluations = evaluations
     app.state.releases = releases
     app.state.database = registry_database
+    app.state.policy_engine = active_policy_engine
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
 

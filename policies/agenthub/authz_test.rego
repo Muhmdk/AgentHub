@@ -97,12 +97,63 @@ test_critical_risk_production_is_denied if {
 	"critical_risk_production_forbidden" in result.reasons
 }
 
-test_runtime_action_fails_closed_until_runtime_rules_apply if {
-	candidate := registration_input("local", "medium", "fake", read_tools)
-	runtime := object.union(candidate, {"action": {"kind": "tool_execution"}})
-	result := decision with input as runtime
+test_declared_read_tool_and_scope_are_allowed if {
+	result := decision with input as tool_input("inventory.read", ["inventory:read"], "read")
+	result.allow
+	result.reasons == ["tool_execution_allowed"]
+}
+
+test_undeclared_cross_agent_and_write_tools_are_denied if {
+	cross_agent := decision with input as tool_input("customer-profile.read", ["customer:read"], "read")
+	write := decision with input as tool_input("inventory.read", ["inventory:write"], "write")
+	not cross_agent.allow
+	"tool_not_declared" in cross_agent.reasons
+	not write.allow
+	"tool_access_not_allowed" in write.reasons
+}
+
+test_missing_tool_scope_is_denied if {
+	result := decision with input as tool_input("inventory.read", ["inventory:admin"], "read")
 	not result.allow
-	result.reasons == ["unsupported_action"]
+	"missing_scope" in result.reasons
+}
+
+test_declared_model_is_allowed_with_bounded_obligations if {
+	result := decision with input as model_input("local", "fake", "deterministic-v1", 800)
+	result.allow
+	result.obligations.max_output_tokens == 4096
+	result.obligations.timeout_ms == 10000
+}
+
+test_undeclared_or_environment_forbidden_model_is_denied if {
+	undeclared := decision with input as model_input("local", "fake", "other-model", 800)
+	forbidden := decision with input as model_input("production", "fake", "deterministic-v1", 800)
+	not undeclared.allow
+	"model_not_declared" in undeclared.reasons
+	not forbidden.allow
+	"model_provider_not_allowed" in forbidden.reasons
+}
+
+test_requested_model_token_budget_is_denied if {
+	result := decision with input as model_input("local", "fake", "deterministic-v1", 5000)
+	not result.allow
+	"output_token_budget_exceeded" in result.reasons
+}
+
+test_external_pii_sets_redaction_obligation if {
+	candidate := model_input("staging", "azure-openai", "gpt-deployment", 800)
+	pii_action := object.union(candidate.action, {
+		"data_classes": ["internal", "pii"],
+		"external_provider": true,
+	})
+	pii_agent := object.union(candidate.agent, {"model": {
+		"provider": "azure-openai",
+		"model": "gpt-deployment",
+	}})
+	pii_candidate := object.union(candidate, {"action": pii_action, "agent": pii_agent})
+	result := decision with input as pii_candidate
+	result.allow
+	result.obligations.redact_pii
 }
 
 read_tools := [{
@@ -139,6 +190,36 @@ promotion_input(environment, risk_tier, provider, approvals) := {
 		"evaluation_passed": true,
 		"security_passed": true,
 		"approvals": approvals,
+	},
+	"context": request_context(environment),
+}
+
+tool_input(tool_name, required_scopes, access) := {
+	"schema_version": "agenthub.dev/policy-input/v1",
+	"subject": service_subject,
+	"agent": agent("medium", "fake", read_tools),
+	"action": {
+		"kind": "tool_execution",
+		"tool_name": tool_name,
+		"required_scopes": required_scopes,
+		"access": access,
+		"arguments_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	},
+	"context": request_context("local"),
+}
+
+model_input(environment, provider, model_name, output_tokens) := {
+	"schema_version": "agenthub.dev/policy-input/v1",
+	"subject": service_subject,
+	"agent": agent("medium", provider, read_tools),
+	"action": {
+		"kind": "model_invocation",
+		"provider": provider,
+		"model": model_name,
+		"requested_input_tokens": 100,
+		"requested_output_tokens": output_tokens,
+		"data_classes": ["internal"],
+		"external_provider": false,
 	},
 	"context": request_context(environment),
 }

@@ -23,6 +23,9 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.policy.enabled }}
+        checksum/policy: {{ include (print $.Template.BasePath "/policy-configmap.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -113,6 +116,51 @@ spec:
               mountPath: {{ .Values.keyVault.mountPath }}
               readOnly: true
             {{- end }}
+        {{- if .Values.policy.enabled }}
+        - name: policy
+          image: "{{ .Values.policy.image.repository }}@{{ .Values.policy.image.digest }}"
+          imagePullPolicy: {{ .Values.policy.image.pullPolicy }}
+          args:
+            - run
+            - --server
+            - --addr=127.0.0.1:{{ .Values.policy.port }}
+            - --log-level=error
+            - /policy
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: policy
+              containerPort: {{ .Values.policy.port }}
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /health
+              port: policy
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: policy
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health?plugins
+              port: policy
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.policy.resources | nindent 12 }}
+          volumeMounts:
+            - name: policy-bundle
+              mountPath: /policy
+              readOnly: true
+        {{- end }}
       volumes:
         - name: tmp
           emptyDir:
@@ -124,4 +172,9 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: {{ include "agenthub.fullname" . }}-key-vault
+        {{- end }}
+        {{- if .Values.policy.enabled }}
+        - name: policy-bundle
+          configMap:
+            name: {{ include "agenthub.fullname" . }}-policy
         {{- end }}

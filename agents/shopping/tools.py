@@ -1,6 +1,6 @@
 """Typed read-only product retrieval tool."""
 
-from typing import ClassVar, Literal, Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -58,7 +58,8 @@ class ProductSearchOutput(BaseModel):
 
 
 class ProductTool(Protocol):
-    definition: ClassVar[ToolDefinition]
+    @property
+    def definition(self) -> ToolDefinition: ...
 
     async def invoke(self, arguments: dict[str, JsonValue]) -> ToolObservation: ...
 
@@ -66,7 +67,7 @@ class ProductTool(Protocol):
 class ProductSearchTool:
     """Search trusted products without any write or purchase capability."""
 
-    definition: ClassVar[ToolDefinition] = ToolDefinition(
+    definition: ToolDefinition = ToolDefinition(
         name="product.search",
         description="Search the versioned product corpus using optional price constraints.",
     )

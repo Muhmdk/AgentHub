@@ -6,6 +6,10 @@ runtime:
   retrievalProvider: azure-search
   otelEnabled: true
   otelExporter: azure-monitor
+  policyEngineUrl: http://127.0.0.1:8181/v1/data/agenthub/authz/decision
+
+policy:
+  enabled: true
 
 database:
   authMode: azure-workload-identity

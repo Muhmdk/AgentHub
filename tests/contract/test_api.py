@@ -6,9 +6,33 @@ from fastapi.testclient import TestClient
 
 from apps.api.config import Settings
 from apps.api.main import create_app
+from packages.contracts.governance import PolicyDecision, PolicyInput, PolicyObligations
 from packages.registry.database import Database
 
 _GATEWAY_TOKEN = "gateway-contract-token-with-at-least-32-characters"
+
+
+class AllowingPolicyEngine:
+    async def decide(self, policy_input: PolicyInput) -> PolicyDecision:
+        return PolicyDecision(
+            schema_version="agenthub.dev/policy-decision/v1",
+            allow=True,
+            reasons=[f"{policy_input.action.kind}_allowed"],
+            policy_bundle_version="contract.v1",
+            obligations=PolicyObligations(audit=True),
+        )
+
+
+class DenyingPolicyEngine:
+    async def decide(self, policy_input: PolicyInput) -> PolicyDecision:
+        del policy_input
+        return PolicyDecision(
+            schema_version="agenthub.dev/policy-decision/v1",
+            allow=False,
+            reasons=["tool_not_declared"],
+            policy_bundle_version="contract.v1",
+            obligations=PolicyObligations(audit=True),
+        )
 
 
 class UnreadyDatabase(Database):
@@ -213,13 +237,43 @@ def test_gateway_rejects_unknown_agent_after_authentication(client: TestClient) 
 
 
 @pytest.mark.contract
+def test_runtime_policy_deny_returns_stable_gateway_error() -> None:
+    app = create_app(
+        Settings(environment="test", _env_file=None),
+        policy_engine=DenyingPolicyEngine(),
+    )
+
+    with TestClient(app, raise_server_exceptions=False) as denied_client:
+        response = denied_client.post(
+            "/gateway/agents/inventory-agent/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+            headers={
+                "X-AgentHub-Identity": "local/contract-test",
+                "X-Correlation-ID": "policy-deny-contract",
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "error": {
+            "code": "policy_denied",
+            "message": "Action denied by policy",
+            "correlation_id": "policy-deny-contract",
+            "details": [],
+        }
+    }
+
+
+@pytest.mark.contract
 def test_production_exposes_only_authenticated_gateway_invocation() -> None:
     app = create_app(
         Settings(
             environment="production",
             gateway_service_tokens={"service/runtime": _GATEWAY_TOKEN},
+            policy_engine_url="http://127.0.0.1:8181/v1/data/agenthub/authz/decision",
             _env_file=None,
-        )
+        ),
+        policy_engine=AllowingPolicyEngine(),
     )
 
     with TestClient(app, raise_server_exceptions=False) as production_client:

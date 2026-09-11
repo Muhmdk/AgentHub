@@ -26,7 +26,8 @@ from packages.contracts.runtime import (
 class InventoryTool(Protocol):
     """Common invocation boundary for the Inventory Agent tool allowlist."""
 
-    definition: ClassVar[ToolDefinition]
+    @property
+    def definition(self) -> ToolDefinition: ...
 
     async def invoke(self, arguments: dict[str, JsonValue]) -> ToolObservation: ...
 
@@ -96,7 +97,7 @@ class WeatherReadOutput(BaseModel):
 class ReadOnlyRetailTool:
     """Common validation and error semantics for fixture-backed tools."""
 
-    definition: ClassVar[ToolDefinition]
+    definition: ToolDefinition
     input_model: ClassVar[type[BaseModel]]
 
     def __init__(self, data: RetailData) -> None:

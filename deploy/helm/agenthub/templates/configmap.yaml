@@ -9,6 +9,10 @@ data:
   AGENTHUB_LOG_LEVEL: {{ .Values.runtime.logLevel | quote }}
   AGENTHUB_API_HOST: "0.0.0.0"
   AGENTHUB_API_PORT: {{ .Values.service.targetPort | quote }}
+  AGENTHUB_POLICY_TIMEOUT_SECONDS: {{ .Values.runtime.policyTimeoutSeconds | quote }}
+  {{- with .Values.runtime.policyEngineUrl }}
+  AGENTHUB_POLICY_ENGINE_URL: {{ . | quote }}
+  {{- end }}
   AGENTHUB_MODEL_PROVIDER: {{ .Values.runtime.modelProvider | quote }}
   AGENTHUB_RETRIEVAL_PROVIDER: {{ .Values.runtime.retrievalProvider | quote }}
   AGENTHUB_AGENT_MAX_STEPS: {{ .Values.runtime.agentMaxSteps | quote }}

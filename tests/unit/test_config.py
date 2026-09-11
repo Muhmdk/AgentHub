@@ -50,12 +50,19 @@ def test_deployed_environment_requires_bounded_gateway_credentials() -> None:
             },
             _env_file=None,
         )
+    with pytest.raises(ValidationError, match="policy engine URL"):
+        Settings(
+            environment="production",
+            gateway_service_tokens={"service/runtime": shared_token},
+            _env_file=None,
+        )
 
     settings = Settings(
         environment="production",
         gateway_service_tokens={
             "service/runtime": "gateway-test-token-with-at-least-32-characters"
         },
+        policy_engine_url="http://127.0.0.1:8181/v1/data/agenthub/authz/decision",
         _env_file=None,
     )
 
@@ -64,6 +71,7 @@ def test_deployed_environment_requires_bounded_gateway_credentials() -> None:
         .get_secret_value()
         .startswith("gateway-test")
     )
+    assert settings.policy_timeout_seconds == 2.0
 
 
 @pytest.mark.unit

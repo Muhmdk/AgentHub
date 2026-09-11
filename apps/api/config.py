@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     api_host: str = Field(default="127.0.0.1", min_length=1)
     api_port: int = Field(default=8000, ge=1, le=65535)
     gateway_service_tokens: dict[str, SecretStr] = Field(default_factory=dict)
+    policy_engine_url: str | None = None
+    policy_timeout_seconds: float = Field(default=2.0, gt=0.0, le=30.0)
     model_provider: Literal["fake", "azure-openai"] = "fake"
     retrieval_provider: Literal["local", "azure-search"] = "local"
     azure_managed_identity_client_id: str | None = None
@@ -97,6 +99,12 @@ class Settings(BaseSettings):
             token_values.add(token_value)
         if self.environment in {"staging", "production"} and not self.gateway_service_tokens:
             raise ValueError("Gateway service credentials are required outside local and test")
+        if self.environment in {"staging", "production"} and not self.policy_engine_url:
+            raise ValueError("A policy engine URL is required outside local and test")
+        if self.policy_engine_url and not self.policy_engine_url.startswith(
+            ("http://", "https://")
+        ):
+            raise ValueError("Policy engine URL must use HTTP or HTTPS")
         if self.model_provider == "azure-openai" and (
             not self.azure_openai_endpoint or not self.azure_openai_deployment
         ):
