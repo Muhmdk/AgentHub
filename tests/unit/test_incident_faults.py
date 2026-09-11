@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from packages.contracts.delivery import DeliveryEnvironment
 from packages.contracts.incident import EvidenceKind
 from packages.contracts.manifest import RetrievalSpec
 from packages.contracts.retrieval import SearchRequest
@@ -15,7 +16,7 @@ from packages.incidents.faults import TopKRegressionFault
 def test_top_k_fault_is_measurable_and_holds_model_latency_constant() -> None:
     scenario = TopKRegressionFault().build(
         agent_name="knowledge-agent",
-        environment="production",
+        environment=DeliveryEnvironment.PRODUCTION,
         release_id=uuid4(),
         route_id=uuid4(),
         canary_rollout_id=uuid4(),

@@ -12,7 +12,12 @@ from alembic import command as alembic_command
 from alembic.config import Config
 from sqlalchemy import text
 
-from packages.contracts.delivery import CanaryAction, CanaryActionRequest, CreateCanaryRequest
+from packages.contracts.delivery import (
+    CanaryAction,
+    CanaryActionRequest,
+    CreateCanaryRequest,
+    DeliveryEnvironment,
+)
 from packages.contracts.incident import (
     DraftNarrativeClaim,
     InvestigatorDraft,
@@ -145,7 +150,7 @@ def test_top_k_regression_is_investigated_rolled_back_and_recovered(
 
     scenario = TopKRegressionFault().build(
         agent_name="knowledge-agent",
-        environment="production",
+        environment=DeliveryEnvironment.PRODUCTION,
         release_id=candidate_id,
         route_id=route.id,
         canary_rollout_id=canary.id,

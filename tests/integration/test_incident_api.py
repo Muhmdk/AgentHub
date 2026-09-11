@@ -9,7 +9,12 @@ from fastapi.testclient import TestClient
 
 from apps.api.config import Settings
 from apps.api.main import create_app
-from packages.contracts.delivery import CanaryAction, CanaryActionRequest, CreateCanaryRequest
+from packages.contracts.delivery import (
+    CanaryAction,
+    CanaryActionRequest,
+    CreateCanaryRequest,
+    DeliveryEnvironment,
+)
 from packages.delivery.canary_repository import CanaryRepository
 from packages.delivery.repository import DeliveryRepository
 from packages.incidents.faults import TopKRegressionFault
@@ -176,7 +181,7 @@ def test_incident_rollback_api_derives_policy_facts_server_side(
     route = routes.get(route.id)
     scenario = TopKRegressionFault().build(
         agent_name="knowledge-agent",
-        environment="production",
+        environment=DeliveryEnvironment.PRODUCTION,
         release_id=candidate_id,
         route_id=route.id,
         canary_rollout_id=canary.id,
