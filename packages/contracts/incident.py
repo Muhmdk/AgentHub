@@ -219,6 +219,37 @@ class EvidenceCollectionResult(BaseModel):
     evidence: IncidentEvidence
 
 
+class TimelineEntry(BaseModel):
+    """One source-linked, content-addressed event on an incident timeline."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    entry_id: UUID
+    category: Literal["trigger", "evidence"]
+    kind: str = Field(min_length=2, max_length=100)
+    source_ref: str = Field(min_length=1, max_length=500)
+    summary: str = Field(min_length=3, max_length=500)
+    occurred_at: datetime
+    normalized_at: datetime
+    recorded_at: datetime
+    content_hash: Sha256
+    subject_id: str | None = Field(default=None, min_length=1, max_length=200)
+    clock_skew_seconds: float = Field(default=0, ge=0)
+
+
+class IncidentTimeline(BaseModel):
+    """Deterministic time ordering with explicit evidence-quality warnings."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    incident_id: UUID
+    generated_at: datetime
+    entries: list[TimelineEntry]
+    missing_sources: list[EvidenceKind]
+    warnings: list[str]
+    clock_skew_detected: bool
+
+
 class IncidentDetection(BaseModel):
     """A non-breach decision or a persisted incident result."""
 

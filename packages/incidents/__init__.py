@@ -19,6 +19,7 @@ from packages.incidents.repository import (
 )
 from packages.incidents.service import IncidentService
 from packages.incidents.sources import IncidentSignalFactory
+from packages.incidents.timeline import IncidentTimelineBuilder
 
 __all__ = [
     "ConfigEvidenceAdapter",
@@ -31,6 +32,7 @@ __all__ = [
     "IncidentService",
     "IncidentSignalFactory",
     "IncidentStore",
+    "IncidentTimelineBuilder",
     "IncidentTriggerDetector",
     "ReleaseEvidenceAdapter",
     "TelemetryEvidenceAdapter",
