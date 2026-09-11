@@ -5,10 +5,11 @@ UV_VERSION := 0.12.11
 TERRAFORM ?= terraform
 HELM ?= helm
 KUBECONFORM ?= kubeconform
+OPA ?= opa
 HELM_CHART := deploy/helm/agenthub
 HELM_CI_VALUES := tests/fixtures/helm/values-ci.yaml
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security infra-terraform infra-helm infra-validate smoke-deployment up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security policy infra-terraform infra-helm infra-validate smoke-deployment up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -47,6 +48,11 @@ test-e2e:
 security:
 	git ls-files -z | xargs -0 $(BIN)/detect-secrets-hook --baseline .secrets.baseline
 	$(BIN)/pip-audit
+
+policy:
+	$(OPA) fmt --list --fail policies/agenthub/*.rego
+	$(OPA) check --strict policies
+	$(OPA) test policies -v
 
 infra-terraform:
 	$(TERRAFORM) fmt -check -recursive infra/terraform

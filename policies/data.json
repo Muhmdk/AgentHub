@@ -1,0 +1,13 @@
+{
+  "agenthub": {
+    "config": {
+      "policy_bundle_version": "phase08.1",
+      "allowed_model_providers": {
+        "local": ["fake"],
+        "test": ["fake"],
+        "staging": ["fake", "azure-openai"],
+        "production": ["azure-openai"]
+      }
+    }
+  }
+}
