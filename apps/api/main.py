@@ -54,6 +54,8 @@ from packages.evaluation.service import EvaluationService
 from packages.governance import (
     AuthorizedChatModel,
     AuthorizedTool,
+    BudgetLimits,
+    BudgetManager,
     LocalPolicyEngine,
     OPAHttpPolicyEngine,
     PolicyAuthorizer,
@@ -112,6 +114,12 @@ def create_app(
         else:
             active_policy_engine = LocalPolicyEngine()
     profiles = agent_policy_profiles(model.name)
+    budget_manager = BudgetManager()
+    budget_limits = BudgetLimits(
+        requests_per_minute=app_settings.model_requests_per_minute,
+        tokens_per_minute=app_settings.model_tokens_per_minute,
+        cost_per_hour_usd=app_settings.model_cost_per_hour_usd,
+    )
     inventory_authorizer = PolicyAuthorizer(
         active_policy_engine,
         profiles["inventory-agent"],
@@ -127,11 +135,25 @@ def create_app(
         profiles["shopping-agent"],
         app_settings.environment,
     )
+
+    def governed_model(authorizer: PolicyAuthorizer) -> AuthorizedChatModel:
+        return AuthorizedChatModel(
+            model,
+            authorizer,
+            budget_manager=budget_manager,
+            budget_limits=budget_limits,
+            timeout_seconds=app_settings.model_timeout_seconds,
+            max_attempts=app_settings.model_max_attempts,
+            retry_backoff_seconds=app_settings.model_retry_backoff_seconds,
+            input_cost_per_million=app_settings.azure_openai_input_cost_per_million,
+            output_cost_per_million=app_settings.azure_openai_output_cost_per_million,
+        )
+
     retail_data = RetailData.load()
     inventory_tools = default_inventory_tools(retail_data)
     inventory = inventory_agent or InventoryAgent(
         data=retail_data,
-        model=AuthorizedChatModel(model, inventory_authorizer),
+        model=governed_model(inventory_authorizer),
         tools={
             name: AuthorizedTool(
                 tool,
@@ -155,7 +177,7 @@ def create_app(
     knowledge = knowledge_agent or KnowledgeAgent(
         retriever=retriever,
         corpus=corpus,
-        model=AuthorizedChatModel(model, knowledge_authorizer),
+        model=governed_model(knowledge_authorizer),
         top_k=app_settings.rag_top_k,
         minimum_score=app_settings.rag_minimum_score,
         timeout_seconds=app_settings.retrieval_timeout_seconds,
@@ -168,7 +190,7 @@ def create_app(
             authorizer=shopping_authorizer,
             required_scopes=["catalog:read"],
         ),
-        model=AuthorizedChatModel(model, shopping_authorizer),
+        model=governed_model(shopping_authorizer),
         timeout_seconds=app_settings.agent_timeout_seconds,
         telemetry=telemetry,
     )

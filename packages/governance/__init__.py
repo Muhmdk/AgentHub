@@ -1,5 +1,6 @@
 """Policy evaluation and runtime enforcement for AgentHub."""
 
+from packages.governance.budgets import BudgetKey, BudgetLimits, BudgetManager
 from packages.governance.engine import (
     LocalPolicyEngine,
     OPAHttpPolicyEngine,
@@ -25,6 +26,9 @@ from packages.governance.runtime import (
 __all__ = [
     "AuthorizedChatModel",
     "AuthorizedTool",
+    "BudgetKey",
+    "BudgetLimits",
+    "BudgetManager",
     "LocalPolicyEngine",
     "OPAHttpPolicyEngine",
     "PIIFinding",

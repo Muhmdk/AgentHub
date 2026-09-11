@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     gateway_service_tokens: dict[str, SecretStr] = Field(default_factory=dict)
     policy_engine_url: str | None = None
     policy_timeout_seconds: float = Field(default=2.0, gt=0.0, le=30.0)
+    model_requests_per_minute: int = Field(default=120, ge=1, le=100_000)
+    model_tokens_per_minute: int = Field(default=100_000, ge=1, le=10_000_000)
+    model_cost_per_hour_usd: float = Field(default=10.0, ge=0.0, le=100_000.0)
+    model_timeout_seconds: float = Field(default=10.0, gt=0.0, le=120.0)
+    model_max_attempts: int = Field(default=2, ge=1, le=3)
+    model_retry_backoff_seconds: float = Field(default=0.05, ge=0.0, le=5.0)
     model_provider: Literal["fake", "azure-openai"] = "fake"
     retrieval_provider: Literal["local", "azure-search"] = "local"
     azure_managed_identity_client_id: str | None = None

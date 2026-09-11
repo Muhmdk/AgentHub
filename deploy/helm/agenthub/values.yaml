@@ -27,6 +27,12 @@ runtime:
   environment: local
   logLevel: INFO
   modelProvider: fake
+  modelRequestsPerMinute: 120
+  modelTokensPerMinute: 100000
+  modelCostPerHourUsd: 10.0
+  modelTimeoutSeconds: 10.0
+  modelMaxAttempts: 2
+  modelRetryBackoffSeconds: 0.05
   retrievalProvider: local
   agentMaxSteps: 3
   toolTimeoutSeconds: 1.0
@@ -39,6 +45,8 @@ runtime:
   azureDatabaseBootstrapIdentityClientId: ""
   azureOpenAIEndpoint: ""
   azureOpenAIDeployment: ""
+  azureOpenAIInputCostPerMillion: 0.0
+  azureOpenAIOutputCostPerMillion: 0.0
   azureSearchEndpoint: ""
   azureSearchIndexName: ""
   otelEnabled: false

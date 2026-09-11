@@ -49,12 +49,20 @@ class LocalPolicyEngine:
             and action.external_provider
             and DataClass.PII in action.data_classes
         )
+        obligations = PolicyObligations(
+            audit=True,
+            redact_pii=redact_pii,
+            max_input_tokens=16_000,
+            max_output_tokens=4_096,
+            timeout_ms=10_000,
+            rate_limit_per_minute=120,
+        )
         return PolicyDecision(
             schema_version="agenthub.dev/policy-decision/v1",
             allow=not reasons,
             reasons=reasons or [f"{action.kind}_allowed"],
             policy_bundle_version=self._VERSION,
-            obligations=PolicyObligations(audit=True, redact_pii=redact_pii),
+            obligations=obligations,
         )
 
     @staticmethod
@@ -91,6 +99,10 @@ class LocalPolicyEngine:
         }
         if action.provider not in allowed_providers[policy_input.context.environment.value]:
             return ["model_provider_not_allowed"]
+        if action.requested_input_tokens > 16_000:
+            return ["input_token_budget_exceeded"]
+        if action.requested_output_tokens > 4_096:
+            return ["output_token_budget_exceeded"]
         return []
 
 

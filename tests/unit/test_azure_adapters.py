@@ -3,8 +3,9 @@
 import asyncio
 import json
 from collections.abc import Callable, Mapping
+from email.message import Message
 from types import TracebackType
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -17,6 +18,7 @@ from agents.shared.azure import (
     AzureProviderError,
     AzureSearchConfig,
     AzureSearchRetriever,
+    AzureTransientError,
     DefaultAzureTokenProvider,
     UrllibJsonTransport,
 )
@@ -497,3 +499,43 @@ def test_url_transport_sanitizes_failures_and_rejects_non_objects(
             payload={},
             timeout_seconds=2.0,
         )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_url_transport_classifies_retryable_http_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+) -> None:
+    def fail_request(request: object, *, timeout: float) -> ByteResponse:
+        raise HTTPError("https://provider.example", status, "sensitive", Message(), None)
+
+    monkeypatch.setattr("agents.shared.azure.urlopen", fail_request)
+
+    with pytest.raises(AzureTransientError, match="provider request failed"):
+        UrllibJsonTransport().post(
+            "https://provider.example/path",
+            headers={},
+            payload={},
+            timeout_seconds=2.0,
+        )
+
+
+@pytest.mark.unit
+def test_url_transport_does_not_retry_client_http_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_request(request: object, *, timeout: float) -> ByteResponse:
+        raise HTTPError("https://provider.example", 400, "sensitive", Message(), None)
+
+    monkeypatch.setattr("agents.shared.azure.urlopen", fail_request)
+
+    with pytest.raises(AzureProviderError) as raised:
+        UrllibJsonTransport().post(
+            "https://provider.example/path",
+            headers={},
+            payload={},
+            timeout_seconds=2.0,
+        )
+
+    assert not isinstance(raised.value, AzureTransientError)

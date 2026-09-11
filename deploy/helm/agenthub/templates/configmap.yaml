@@ -14,6 +14,12 @@ data:
   AGENTHUB_POLICY_ENGINE_URL: {{ . | quote }}
   {{- end }}
   AGENTHUB_MODEL_PROVIDER: {{ .Values.runtime.modelProvider | quote }}
+  AGENTHUB_MODEL_REQUESTS_PER_MINUTE: {{ .Values.runtime.modelRequestsPerMinute | quote }}
+  AGENTHUB_MODEL_TOKENS_PER_MINUTE: {{ .Values.runtime.modelTokensPerMinute | quote }}
+  AGENTHUB_MODEL_COST_PER_HOUR_USD: {{ .Values.runtime.modelCostPerHourUsd | quote }}
+  AGENTHUB_MODEL_TIMEOUT_SECONDS: {{ .Values.runtime.modelTimeoutSeconds | quote }}
+  AGENTHUB_MODEL_MAX_ATTEMPTS: {{ .Values.runtime.modelMaxAttempts | quote }}
+  AGENTHUB_MODEL_RETRY_BACKOFF_SECONDS: {{ .Values.runtime.modelRetryBackoffSeconds | quote }}
   AGENTHUB_RETRIEVAL_PROVIDER: {{ .Values.runtime.retrievalProvider | quote }}
   AGENTHUB_AGENT_MAX_STEPS: {{ .Values.runtime.agentMaxSteps | quote }}
   AGENTHUB_TOOL_TIMEOUT_SECONDS: {{ .Values.runtime.toolTimeoutSeconds | quote }}
@@ -36,6 +42,8 @@ data:
   {{- with .Values.runtime.azureOpenAIDeployment }}
   AGENTHUB_AZURE_OPENAI_DEPLOYMENT: {{ . | quote }}
   {{- end }}
+  AGENTHUB_AZURE_OPENAI_INPUT_COST_PER_MILLION: {{ .Values.runtime.azureOpenAIInputCostPerMillion | quote }}
+  AGENTHUB_AZURE_OPENAI_OUTPUT_COST_PER_MILLION: {{ .Values.runtime.azureOpenAIOutputCostPerMillion | quote }}
   {{- with .Values.runtime.azureSearchEndpoint }}
   AGENTHUB_AZURE_SEARCH_ENDPOINT: {{ . | quote }}
   {{- end }}

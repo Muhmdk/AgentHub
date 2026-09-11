@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 from azure.identity import DefaultAzureCredential
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 
+from agents.shared.model import RetryableModelError
 from packages.contracts.retrieval import Chunk, RetrievalTrace, SearchRequest, SearchResult
 from packages.contracts.runtime import JsonScalar, JsonValue, ModelRequest, ModelResponse, Usage
 
@@ -27,6 +28,10 @@ _INDEX_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{1,126}[a-z0-9]$")
 
 class AzureProviderError(RuntimeError):
     """Sanitized cloud-boundary failure safe to expose to application logs."""
+
+
+class AzureTransientError(AzureProviderError, RetryableModelError):
+    """Retryable network, throttling, or provider-availability failure."""
 
 
 class AccessTokenProvider(Protocol):
@@ -88,7 +93,14 @@ class UrllibJsonTransport:
         try:
             with urlopen(request, timeout=timeout_seconds) as response:
                 decoded = json.loads(response.read())
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except HTTPError as exc:
+            error_type = (
+                AzureTransientError if exc.code == 429 or exc.code >= 500 else AzureProviderError
+            )
+            raise error_type("Azure provider request failed") from exc
+        except (URLError, TimeoutError) as exc:
+            raise AzureTransientError("Azure provider request failed") from exc
+        except json.JSONDecodeError as exc:
             raise AzureProviderError("Azure provider request failed") from exc
         if not isinstance(decoded, dict):
             raise AzureProviderError("Azure provider returned an invalid response")

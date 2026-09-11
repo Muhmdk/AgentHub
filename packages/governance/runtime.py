@@ -1,5 +1,6 @@
 """Immediate policy enforcement wrappers for model and tool actions."""
 
+import asyncio
 import hashlib
 import json
 from collections.abc import Iterator
@@ -9,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
-from agents.shared.model import ChatModel
+from agents.shared.model import ChatModel, RetryableModelError
 from packages.contracts.governance import (
     DataClass,
     ModelInvocationAction,
@@ -29,6 +30,13 @@ from packages.contracts.runtime import (
     ModelResponse,
     ToolDefinition,
     ToolObservation,
+)
+from packages.governance.budgets import (
+    BudgetExceeded,
+    BudgetKey,
+    BudgetLimits,
+    BudgetManager,
+    RateLimitExceeded,
 )
 from packages.governance.engine import PolicyEngine, PolicyEngineUnavailable
 from packages.governance.privacy import detect_pii, redact_model_request
@@ -71,6 +79,16 @@ class PolicyAuthorizer:
     def external_model(self) -> bool:
         """Whether the declared provider is outside the local process."""
         return self._agent.model.provider != "fake"
+
+    @property
+    def budget_key(self) -> BudgetKey:
+        """Return stable dimensions for model rate/token/cost accounting."""
+        return BudgetKey(
+            agent_name=self._agent.name,
+            agent_version=self._agent.version,
+            provider=self._agent.model.provider,
+            model=self._agent.model.model,
+        )
 
     async def authorize_tool(
         self,
@@ -165,9 +183,36 @@ class PolicyAuthorizer:
 class AuthorizedChatModel:
     """Chat-model decorator that authorizes immediately before generation."""
 
-    def __init__(self, target: ChatModel, authorizer: PolicyAuthorizer) -> None:
+    def __init__(
+        self,
+        target: ChatModel,
+        authorizer: PolicyAuthorizer,
+        *,
+        budget_manager: BudgetManager | None = None,
+        budget_limits: BudgetLimits | None = None,
+        timeout_seconds: float = 10.0,
+        max_attempts: int = 2,
+        retry_backoff_seconds: float = 0.05,
+        input_cost_per_million: float = 0.0,
+        output_cost_per_million: float = 0.0,
+    ) -> None:
+        if (
+            timeout_seconds <= 0
+            or not 1 <= max_attempts <= 3
+            or not 0 <= retry_backoff_seconds <= 5
+            or input_cost_per_million < 0
+            or output_cost_per_million < 0
+        ):
+            raise ValueError("Authorized model execution limits are invalid")
         self._target = target
         self._authorizer = authorizer
+        self._budget_manager = budget_manager or BudgetManager()
+        self._budget_limits = budget_limits or BudgetLimits()
+        self._timeout_seconds = timeout_seconds
+        self._max_attempts = max_attempts
+        self._retry_backoff_seconds = retry_backoff_seconds
+        self._input_cost_per_million = input_cost_per_million
+        self._output_cost_per_million = output_cost_per_million
 
     @property
     def name(self) -> str:
@@ -189,7 +234,85 @@ class AuthorizedChatModel:
                     "External PII handling denied by policy",
                 )
             request = redact_model_request(request)
-        return await self._target.generate(request)
+        input_tokens = max(
+            1,
+            (sum(len(message.content) for message in request.messages) + 3) // 4,
+        )
+        estimated_tokens = input_tokens + request.max_tokens
+        estimated_cost = (
+            input_tokens * self._input_cost_per_million
+            + request.max_tokens * self._output_cost_per_million
+        ) / 1_000_000
+        policy_rate = decision.obligations.rate_limit_per_minute
+        effective_limits = BudgetLimits(
+            requests_per_minute=min(
+                self._budget_limits.requests_per_minute,
+                policy_rate or self._budget_limits.requests_per_minute,
+            ),
+            tokens_per_minute=self._budget_limits.tokens_per_minute,
+            cost_per_hour_usd=self._budget_limits.cost_per_hour_usd,
+        )
+        try:
+            lease = self._budget_manager.reserve(
+                self._authorizer.budget_key,
+                effective_limits,
+                tokens=estimated_tokens,
+                cost_usd=estimated_cost,
+            )
+        except RateLimitExceeded:
+            raise AgentExecutionError(
+                AgentErrorCode.RATE_LIMITED,
+                "Model rate limit exceeded",
+            ) from None
+        except BudgetExceeded:
+            raise AgentExecutionError(
+                AgentErrorCode.BUDGET_EXCEEDED,
+                "Model budget exceeded",
+            ) from None
+
+        policy_timeout = decision.obligations.timeout_ms
+        timeout_seconds = min(
+            self._timeout_seconds,
+            policy_timeout / 1000 if policy_timeout is not None else self._timeout_seconds,
+        )
+        try:
+            response = await self._generate_with_retries(request, timeout_seconds)
+        except BaseException:
+            self._budget_manager.release(lease)
+            raise
+        self._budget_manager.complete(
+            lease,
+            tokens=response.usage.input_tokens + response.usage.output_tokens,
+            cost_usd=response.usage.estimated_cost_usd,
+        )
+        return response
+
+    async def _generate_with_retries(
+        self,
+        request: ModelRequest,
+        timeout_seconds: float,
+    ) -> ModelResponse:
+        for attempt in range(self._max_attempts):
+            try:
+                return await asyncio.wait_for(
+                    self._target.generate(request),
+                    timeout=timeout_seconds,
+                )
+            except (RetryableModelError, TimeoutError) as exc:
+                if attempt + 1 == self._max_attempts:
+                    code = (
+                        AgentErrorCode.MODEL_TIMEOUT
+                        if isinstance(exc, TimeoutError)
+                        else AgentErrorCode.MODEL_ERROR
+                    )
+                    message = (
+                        "Model invocation timed out"
+                        if code == AgentErrorCode.MODEL_TIMEOUT
+                        else "Model provider is unavailable"
+                    )
+                    raise AgentExecutionError(code, message) from None
+                await asyncio.sleep(self._retry_backoff_seconds * (2**attempt))
+        raise AssertionError("Model retry loop completed without a result")
 
 
 class ToolTarget(Protocol):

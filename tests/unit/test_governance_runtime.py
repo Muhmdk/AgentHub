@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from agents.shared.model import DeterministicFakeModel
+from agents.shared.model import DeterministicFakeModel, RetryableModelError
 from packages.contracts.governance import (
     AuthenticationMethod,
     IdentityKind,
@@ -20,12 +20,16 @@ from packages.contracts.runtime import (
     Citation,
     JsonValue,
     ModelRequest,
+    ModelResponse,
     ToolDefinition,
     ToolObservation,
+    Usage,
 )
 from packages.governance import (
     AuthorizedChatModel,
     AuthorizedTool,
+    BudgetLimits,
+    BudgetManager,
     PolicyAuthorizer,
     PolicyEngineUnavailable,
     RuntimePolicyContext,
@@ -35,9 +39,16 @@ from packages.governance import (
 
 
 class RecordingPolicyEngine:
-    def __init__(self, *, allow: bool = True, unavailable: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        allow: bool = True,
+        unavailable: bool = False,
+        obligations: PolicyObligations | None = None,
+    ) -> None:
         self.allow = allow
         self.unavailable = unavailable
+        self.obligations = obligations or PolicyObligations(audit=True)
         self.inputs: list[PolicyInput] = []
 
     async def decide(self, policy_input: PolicyInput) -> PolicyDecision:
@@ -49,8 +60,46 @@ class RecordingPolicyEngine:
             allow=self.allow,
             reasons=["test_allowed" if self.allow else "test_denied"],
             policy_bundle_version="test.v1",
-            obligations=PolicyObligations(audit=True),
+            obligations=self.obligations,
         )
+
+
+class ScriptedModel:
+    name = "fake/deterministic-v1"
+
+    def __init__(self, outcomes: list[Exception | ModelResponse]) -> None:
+        self.outcomes = outcomes
+        self.call_count = 0
+
+    async def generate(self, request: ModelRequest) -> ModelResponse:
+        del request
+        outcome = self.outcomes[self.call_count]
+        self.call_count += 1
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+class SlowModel:
+    name = "fake/deterministic-v1"
+
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    async def generate(self, request: ModelRequest) -> ModelResponse:
+        del request
+        self.call_count += 1
+        await asyncio.sleep(1)
+        raise AssertionError("timeout should cancel the provider call")
+
+
+def _response() -> ModelResponse:
+    return ModelResponse(
+        response_id="model-response-1",
+        model="fake/deterministic-v1",
+        content="Safe",
+        usage=Usage(input_tokens=2, output_tokens=1, estimated_cost_usd=0.01),
+    )
 
 
 class RecordingTool:
@@ -167,3 +216,104 @@ def test_deployed_action_without_request_identity_fails_closed() -> None:
 
     assert raised.value.code == AgentErrorCode.POLICY_DENIED
     assert engine.inputs == []
+
+
+@pytest.mark.unit
+def test_rate_limit_stops_provider_call_with_stable_error() -> None:
+    engine = RecordingPolicyEngine()
+    target = ScriptedModel([_response()])
+    model = AuthorizedChatModel(
+        target,
+        _authorizer(engine),
+        budget_manager=BudgetManager(),
+        budget_limits=BudgetLimits(
+            requests_per_minute=1,
+            tokens_per_minute=10_000,
+            cost_per_hour_usd=1,
+        ),
+    )
+    request = ModelRequest(messages=[ChatMessage(role="user", content="Hello")])
+
+    asyncio.run(model.generate(request))
+    with pytest.raises(AgentExecutionError) as raised:
+        asyncio.run(model.generate(request))
+
+    assert raised.value.code == AgentErrorCode.RATE_LIMITED
+    assert target.call_count == 1
+
+
+@pytest.mark.unit
+def test_token_budget_stops_provider_before_execution() -> None:
+    target = ScriptedModel([_response()])
+    model = AuthorizedChatModel(
+        target,
+        _authorizer(RecordingPolicyEngine()),
+        budget_limits=BudgetLimits(
+            requests_per_minute=10,
+            tokens_per_minute=10,
+            cost_per_hour_usd=1,
+        ),
+    )
+
+    with pytest.raises(AgentExecutionError) as raised:
+        asyncio.run(
+            model.generate(
+                ModelRequest(
+                    messages=[ChatMessage(role="user", content="Hello")],
+                    max_tokens=10,
+                )
+            )
+        )
+
+    assert raised.value.code == AgentErrorCode.BUDGET_EXCEEDED
+    assert target.call_count == 0
+
+
+@pytest.mark.unit
+def test_retryable_provider_failure_succeeds_within_bound() -> None:
+    target = ScriptedModel([RetryableModelError("transient"), _response()])
+    model = AuthorizedChatModel(
+        target,
+        _authorizer(RecordingPolicyEngine()),
+        retry_backoff_seconds=0,
+    )
+
+    response = asyncio.run(
+        model.generate(ModelRequest(messages=[ChatMessage(role="user", content="Hello")]))
+    )
+
+    assert response.content == "Safe"
+    assert target.call_count == 2
+
+
+@pytest.mark.unit
+def test_timeout_obligation_has_bounded_retries_and_stable_error() -> None:
+    target = SlowModel()
+    engine = RecordingPolicyEngine(obligations=PolicyObligations(audit=True, timeout_ms=1))
+    model = AuthorizedChatModel(
+        target,
+        _authorizer(engine),
+        max_attempts=2,
+        retry_backoff_seconds=0,
+    )
+
+    with pytest.raises(AgentExecutionError) as raised:
+        asyncio.run(
+            model.generate(ModelRequest(messages=[ChatMessage(role="user", content="Hello")]))
+        )
+
+    assert raised.value.code == AgentErrorCode.MODEL_TIMEOUT
+    assert target.call_count == 2
+
+
+@pytest.mark.unit
+def test_non_retryable_provider_failure_is_not_retried() -> None:
+    target = ScriptedModel([RuntimeError("permanent")])
+    model = AuthorizedChatModel(target, _authorizer(RecordingPolicyEngine()))
+
+    with pytest.raises(RuntimeError, match="permanent"):
+        asyncio.run(
+            model.generate(ModelRequest(messages=[ChatMessage(role="user", content="Hello")]))
+        )
+
+    assert target.call_count == 1

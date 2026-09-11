@@ -113,6 +113,9 @@ async def agent_exception_handler(request: Request, exc: Exception) -> Response:
         AgentErrorCode.RETRIEVAL_TIMEOUT: 504,
         AgentErrorCode.POLICY_DENIED: 403,
         AgentErrorCode.POLICY_UNAVAILABLE: 503,
+        AgentErrorCode.RATE_LIMITED: 429,
+        AgentErrorCode.BUDGET_EXCEEDED: 429,
+        AgentErrorCode.MODEL_TIMEOUT: 504,
     }
     logger.warning("agent_request_failed", extra={"error_code": exc.code.value})
     return _response(
