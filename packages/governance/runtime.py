@@ -43,7 +43,7 @@ from packages.governance.budgets import (
     BudgetManager,
     RateLimitExceeded,
 )
-from packages.governance.engine import PolicyEngine, PolicyEngineUnavailable
+from packages.governance.engine import PolicyEngine
 from packages.governance.privacy import detect_pii, redact_model_request
 from packages.governance.repository import (
     GovernanceAuditStore,
@@ -171,7 +171,7 @@ class PolicyAuthorizer:
         )
         try:
             decision = await self._engine.decide(policy_input)
-        except PolicyEngineUnavailable:
+        except Exception:
             await self._append_audit(
                 policy_input,
                 event_type=GovernanceAuditEventType.POLICY_DECISION,

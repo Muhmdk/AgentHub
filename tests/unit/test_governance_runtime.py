@@ -31,6 +31,7 @@ from packages.governance import (
     BudgetLimits,
     BudgetManager,
     InMemoryGovernanceAuditStore,
+    LocalPolicyEngine,
     PolicyAuthorizer,
     PolicyEngineUnavailable,
     RuntimePolicyContext,
@@ -160,6 +161,37 @@ def test_policy_deny_prevents_tool_side_effect() -> None:
 
     with pytest.raises(AgentExecutionError) as raised:
         asyncio.run(tool.invoke({"city": "Toronto"}))
+
+    assert raised.value.code == AgentErrorCode.POLICY_DENIED
+    assert target.call_count == 0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("profile_name", "tool_name", "scope"),
+    [
+        ("knowledge-agent", "inventory.read", "inventory:read"),
+        ("shopping-agent", "inventory.read", "inventory:read"),
+        ("inventory-agent", "customer.profile", "customer:read"),
+    ],
+)
+def test_undeclared_and_cross_agent_tools_are_denied_at_target_boundary(
+    profile_name: str,
+    tool_name: str,
+    scope: str,
+) -> None:
+    engine = LocalPolicyEngine()
+    profile = agent_policy_profiles("fake/deterministic-v1")[profile_name]
+    target = RecordingTool()
+    tool = AuthorizedTool(
+        target,
+        definition=ToolDefinition(name=tool_name, description="Forbidden test tool"),
+        authorizer=PolicyAuthorizer(engine, profile, "test"),
+        required_scopes=[scope],
+    )
+
+    with pytest.raises(AgentExecutionError) as raised:
+        asyncio.run(tool.invoke({"customer": "never-store-this"}))
 
     assert raised.value.code == AgentErrorCode.POLICY_DENIED
     assert target.call_count == 0

@@ -140,6 +140,21 @@ test_requested_model_token_budget_is_denied if {
 	"output_token_budget_exceeded" in result.reasons
 }
 
+test_model_token_budget_exact_boundary_is_allowed_and_overage_is_denied if {
+	base := model_input("local", "fake", "deterministic-v1", 4096)
+	exact := object.union(base, {"action": object.union(base.action, {"requested_input_tokens": 16000})})
+	over := object.union(base, {"action": object.union(base.action, {
+		"requested_input_tokens": 16001,
+		"requested_output_tokens": 4097,
+	})})
+	exact_result := decision with input as exact
+	over_result := decision with input as over
+	exact_result.allow
+	not over_result.allow
+	"input_token_budget_exceeded" in over_result.reasons
+	"output_token_budget_exceeded" in over_result.reasons
+}
+
 test_external_pii_sets_redaction_obligation if {
 	candidate := model_input("staging", "azure-openai", "gpt-deployment", 800)
 	pii_action := object.union(candidate.action, {
@@ -154,6 +169,14 @@ test_external_pii_sets_redaction_obligation if {
 	result := decision with input as pii_candidate
 	result.allow
 	result.obligations.redact_pii
+}
+
+test_local_pii_does_not_require_external_redaction if {
+	candidate := model_input("local", "fake", "deterministic-v1", 800)
+	pii_action := object.union(candidate.action, {"data_classes": ["internal", "pii"]})
+	result := decision with input as object.union(candidate, {"action": pii_action})
+	result.allow
+	not result.obligations.redact_pii
 }
 
 read_tools := [{

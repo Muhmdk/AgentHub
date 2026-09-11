@@ -6,6 +6,7 @@ import pytest
 
 from agents.shared.model import DeterministicFakeModel
 from packages.contracts.governance import (
+    GovernanceAuditEvent,
     GovernanceAuditEventType,
     GovernanceAuditOutcome,
     PolicyDecision,
@@ -17,6 +18,7 @@ from packages.contracts.runtime import (
     AgentExecutionError,
     ChatMessage,
     ModelRequest,
+    ModelResponse,
 )
 from packages.governance import (
     AuthorizedChatModel,
@@ -39,6 +41,22 @@ class DecisionEngine:
             policy_bundle_version="audit-test.v1",
             obligations=PolicyObligations(audit=True),
         )
+
+
+class FailingAuditStore:
+    def append(self, event: GovernanceAuditEvent) -> None:
+        del event
+        raise RuntimeError("sensitive database failure")
+
+    def list_events(
+        self,
+        *,
+        agent_name: str | None = None,
+        outcome: GovernanceAuditOutcome | None = None,
+        limit: int = 100,
+    ) -> list[GovernanceAuditEvent]:
+        del agent_name, outcome, limit
+        return []
 
 
 def _model(
@@ -138,3 +156,33 @@ def test_audit_filters_are_bounded_and_stable() -> None:
     assert len(store.list_events(agent_name="inventory-agent", limit=1)) == 1
     assert store.list_events(agent_name="other-agent") == []
     assert len(store.list_events(outcome=GovernanceAuditOutcome.ALLOW)) == 1
+
+
+@pytest.mark.unit
+def test_required_audit_failure_stops_model_execution_with_safe_error() -> None:
+    class CountingModel(DeterministicFakeModel):
+        def __init__(self) -> None:
+            self.called = False
+
+        async def generate(self, request: ModelRequest) -> ModelResponse:
+            self.called = True
+            return await super().generate(request)
+
+    profile = agent_policy_profiles("fake/deterministic-v1")["inventory-agent"]
+    target = CountingModel()
+    model = AuthorizedChatModel(
+        target,
+        PolicyAuthorizer(DecisionEngine(), profile, "test", FailingAuditStore()),
+    )
+
+    with pytest.raises(AgentExecutionError) as raised:
+        asyncio.run(
+            model.generate(
+                ModelRequest(messages=[ChatMessage(role="user", content="Never execute")])
+            )
+        )
+
+    assert raised.value.code == AgentErrorCode.POLICY_UNAVAILABLE
+    assert raised.value.message == "Governance audit is unavailable"
+    assert "database" not in str(raised.value)
+    assert target.called is False
