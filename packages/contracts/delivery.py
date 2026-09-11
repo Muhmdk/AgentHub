@@ -289,3 +289,49 @@ class CanaryProgress(BaseModel):
         if self.state is not CanaryState.PAUSED and self.resume_state is not None:
             raise ValueError("Only paused canaries may contain a resume state")
         return self
+
+
+class CanaryGuardrailPolicy(BaseModel):
+    """Minimum evidence and maximum regressions required for promotion."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    min_samples: int = Field(default=100, ge=1)
+    min_successful_samples: int = Field(default=95, ge=1)
+    min_window_seconds: float = Field(default=300, gt=0)
+    max_telemetry_age_seconds: float = Field(default=120, gt=0)
+    min_quality_delta: float = Field(default=-0.02, ge=-1, le=1)
+    min_safety_delta: float = Field(default=0, ge=-1, le=1)
+    max_latency_delta_ms: float = Field(default=100, ge=0)
+    max_error_rate_delta: float = Field(default=0.01, ge=0, le=1)
+    max_cost_delta_usd: float = Field(default=0.005, ge=0)
+
+    @model_validator(mode="after")
+    def validate_sample_thresholds(self) -> CanaryGuardrailPolicy:
+        if self.min_successful_samples > self.min_samples:
+            raise ValueError("Successful sample requirement cannot exceed total samples")
+        return self
+
+
+class GuardrailCheck(BaseModel):
+    """One explainable promotion requirement and its observed result."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=2, max_length=100)
+    passed: bool
+    observed: float | int | bool | None
+    operator: Literal[">=", "<=", "present", "healthy"]
+    threshold: float | int | bool | None
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class CanaryGateDecision(BaseModel):
+    """Complete evidence explaining whether a canary may advance."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    allowed: bool
+    checks: list[GuardrailCheck] = Field(min_length=1)
+    reasons: list[str]
+    evaluated_at: datetime
