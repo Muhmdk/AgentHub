@@ -134,11 +134,11 @@ model p95 remains 200 ms, and agent p95 rises from 295 ms to 700 ms.
 
 ```bash
 make demo-incident-fault
-AGENTHUB_DATABASE_URL=postgresql+psycopg://agenthub:agenthub@127.0.0.1:5433/agenthub \
-  .venv/bin/pytest tests/e2e/test_incident_rollback.py --no-cov
+.venv/bin/pytest tests/e2e/test_incident_rollback.py --no-cov
 ```
 
-Run the E2E command only against the dedicated local/test database; its fixture truncates AgentHub
-tables before and after the drill. The test proves trigger detection, evidence correlation, citation
-grounding, automatic policy eligibility, immutable known-good rollback, audit ordering, recovery,
-and incident resolution without cloud credentials.
+Set `AGENTHUB_DATABASE_URL` in the shell before running the E2E command. Use only the dedicated
+local/test database: its fixture truncates AgentHub tables before and after the drill. The test
+proves trigger detection, evidence correlation, citation grounding, automatic policy eligibility,
+immutable known-good rollback, audit ordering, recovery, and incident resolution without cloud
+credentials.
