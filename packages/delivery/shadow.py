@@ -74,7 +74,9 @@ class ShadowDispatcher:
         sampling_key: str,
     ) -> AgentResponse:
         """Invoke stable synchronously and enqueue eligible candidate work afterward."""
+        stable_started = perf_counter()
         stable_response = await stable.invoke(request)
+        stable_latency_ms = (perf_counter() - stable_started) * 1000
         candidate_target = route.allocation.candidate
         if candidate is None or candidate_target is None or not self._sampled(route, sampling_key):
             return stable_response
@@ -87,6 +89,7 @@ class ShadowDispatcher:
                 request=redacted_request,
                 request_redacted=redacted_request.query != request.query,
                 stable_response=stable_response,
+                stable_latency_ms=stable_latency_ms,
                 correlation_id=correlation_id,
                 request_hash=self._request_hash(route, request),
             ),
@@ -134,6 +137,7 @@ class ShadowDispatcher:
         request: AgentRequest,
         request_redacted: bool,
         stable_response: AgentResponse,
+        stable_latency_ms: float,
         correlation_id: str,
         request_hash: str,
     ) -> None:
@@ -175,6 +179,7 @@ class ShadowDispatcher:
                 candidate_response=response,
                 shadow_status=status,
                 shadow_error_code=error_code,
+                stable_latency_ms=stable_latency_ms,
                 shadow_latency_ms=(perf_counter() - started) * 1000,
                 recorded_at=datetime.now(UTC),
             )

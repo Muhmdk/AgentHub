@@ -185,6 +185,60 @@ class ShadowPairRecord(BaseModel):
     candidate_response: AgentResponse | None
     shadow_status: ShadowStatus
     shadow_error_code: str | None = Field(default=None, max_length=100)
+    stable_latency_ms: float = Field(ge=0)
     shadow_latency_ms: float = Field(ge=0)
     recorded_at: datetime
     source: Literal["shadow"] = "shadow"
+
+    @model_validator(mode="after")
+    def validate_shadow_outcome(self) -> ShadowPairRecord:
+        succeeded = self.shadow_status is ShadowStatus.SUCCEEDED
+        if succeeded != (self.candidate_response is not None):
+            raise ValueError("Only successful shadow records may contain a candidate response")
+        if succeeded and self.shadow_error_code is not None:
+            raise ValueError("Successful shadow records cannot contain an error code")
+        return self
+
+
+class ResponseAssessment(BaseModel):
+    """Pluggable normalized quality and safety judgment for one response."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    quality: float = Field(ge=0, le=1)
+    safety: float = Field(ge=0, le=1)
+
+
+class MetricDelta(BaseModel):
+    """Candidate-minus-stable delta with a 95% confidence interval."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    samples: int = Field(ge=0)
+    stable_mean: float
+    candidate_mean: float
+    delta: float
+    confidence_low: float
+    confidence_high: float
+    unit: Literal["score", "milliseconds", "rate", "usd"]
+    lower_is_better: bool
+
+
+class ShadowComparison(BaseModel):
+    """Aggregate evidence for one stable/candidate release pairing."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    route_id: UUID
+    route_revisions: list[int] = Field(min_length=1)
+    stable_release_id: UUID
+    candidate_release_id: UUID
+    sample_count: int = Field(ge=1)
+    successful_sample_count: int = Field(ge=0)
+    window_start: datetime
+    window_end: datetime
+    quality: MetricDelta
+    safety: MetricDelta
+    latency: MetricDelta
+    error_rate: MetricDelta
+    cost: MetricDelta
