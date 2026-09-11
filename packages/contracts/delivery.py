@@ -60,6 +60,13 @@ class CanaryAction(StrEnum):
     ABORT = "abort"
 
 
+class RequestComplexity(StrEnum):
+    """Explainable request class used for model selection."""
+
+    SMALL = "small"
+    LARGE = "large"
+
+
 class RouteTarget(BaseModel):
     """Immutable release identity selected by a route."""
 
@@ -335,3 +342,72 @@ class CanaryGateDecision(BaseModel):
     checks: list[GuardrailCheck] = Field(min_length=1)
     reasons: list[str]
     evaluated_at: datetime
+
+
+class ComplexitySignal(BaseModel):
+    """One deterministic feature contributing to a complexity score."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=2, max_length=100)
+    matched: bool
+    weight: int = Field(ge=0, le=10)
+    explanation: str = Field(min_length=3, max_length=300)
+
+
+class ComplexityAssessment(BaseModel):
+    """Auditable classifier output with no hidden model judgment."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    complexity: RequestComplexity
+    score: int = Field(ge=0, le=100)
+    threshold: int = Field(ge=1, le=100)
+    signals: list[ComplexitySignal] = Field(min_length=1)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class ModelCostProfile(BaseModel):
+    """Policy-approved model quality and token pricing evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: str = Field(min_length=3, max_length=200)
+    quality_score: float = Field(ge=0, le=1)
+    input_cost_per_million: float = Field(ge=0)
+    output_cost_per_million: float = Field(ge=0)
+
+
+class CostRoutingPolicy(BaseModel):
+    """Governed small/large model routing configuration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enabled: bool = True
+    complexity_threshold: int = Field(default=3, ge=1, le=100)
+    minimum_quality_score: float = Field(default=0.8, ge=0, le=1)
+    small_model: ModelCostProfile
+    large_model: ModelCostProfile
+
+    @model_validator(mode="after")
+    def validate_distinct_models(self) -> CostRoutingPolicy:
+        if self.small_model.model == self.large_model.model:
+            raise ValueError("Small and large model profiles must differ")
+        return self
+
+
+class CostRouteDecision(BaseModel):
+    """Explainable quality-constrained model choice and estimated spend."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    selected_model: str
+    selected_quality_score: float = Field(ge=0, le=1)
+    classification: ComplexityAssessment
+    estimated_input_tokens: int = Field(ge=1)
+    requested_output_tokens: int = Field(ge=1)
+    estimated_cost_usd: float = Field(ge=0)
+    alternative_model: str
+    alternative_cost_usd: float = Field(ge=0)
+    estimated_savings_usd: float
+    reason: str = Field(min_length=3, max_length=500)
