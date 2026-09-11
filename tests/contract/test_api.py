@@ -167,6 +167,46 @@ def test_unexpected_errors_are_safe(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.contract
+def test_delivery_console_and_cost_recommendation_are_exposed(client: TestClient) -> None:
+    page = client.get("/delivery")
+    recommendation = client.post(
+        "/delivery/cost-recommendation",
+        json={
+            "request": {"query": "Summarize the return policy"},
+            "policy": {
+                "minimum_quality_score": 0.8,
+                "small_model": {
+                    "model": "azure/gpt-small",
+                    "quality_score": 0.86,
+                    "input_cost_per_million": 0.2,
+                    "output_cost_per_million": 0.8,
+                },
+                "large_model": {
+                    "model": "azure/gpt-large",
+                    "quality_score": 0.95,
+                    "input_cost_per_million": 2,
+                    "output_cost_per_million": 8,
+                },
+            },
+            "requested_output_tokens": 200,
+        },
+    )
+    guardrails = client.post(
+        "/delivery/guardrails/preview",
+        json={"telemetry_healthy": True},
+    )
+
+    assert page.status_code == 200
+    assert "Progressive delivery" in page.text
+    assert recommendation.status_code == 200
+    assert recommendation.json()["selected_model"] == "azure/gpt-small"
+    assert recommendation.json()["classification"]["complexity"] == "small"
+    assert guardrails.status_code == 200
+    assert guardrails.json()["allowed"] is False
+    assert "Paired telemetry is missing" in guardrails.json()["reasons"]
+
+
+@pytest.mark.contract
 def test_inventory_invocation_returns_answer_and_evidence(client: TestClient) -> None:
     response = client.post(
         "/agents/inventory/invoke",

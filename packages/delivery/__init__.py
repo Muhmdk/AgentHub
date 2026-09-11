@@ -1,6 +1,7 @@
 """Progressive-delivery route persistence and runtime selection."""
 
 from packages.delivery.canary import CanaryStateMachine, InvalidCanaryTransition
+from packages.delivery.canary_repository import CanaryRepository, CanaryStore
 from packages.delivery.cost_routing import (
     CostAwareModelRouter,
     CostRoutingBlockedError,
@@ -18,7 +19,9 @@ from packages.delivery.routing import DeterministicRouter
 
 __all__ = [
     "CanaryGuardrailEvaluator",
+    "CanaryRepository",
     "CanaryStateMachine",
+    "CanaryStore",
     "CostAwareModelRouter",
     "CostRoutingBlockedError",
     "DeliveryBlockedError",

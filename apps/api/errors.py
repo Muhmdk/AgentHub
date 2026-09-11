@@ -11,6 +11,11 @@ from starlette.responses import Response
 
 from packages.contracts.errors import ErrorEnvelope, ErrorPayload, ValidationIssue
 from packages.contracts.runtime import AgentErrorCode, AgentExecutionError
+from packages.delivery.repository import (
+    DeliveryBlockedError,
+    DeliveryConflictError,
+    DeliveryNotFoundError,
+)
 from packages.evaluation.repository import EvaluationConflictError, EvaluationNotFoundError
 from packages.evaluation.service import EvaluationTargetNotFoundError
 from packages.registry.repository import RegistryConflictError, RegistryNotFoundError
@@ -232,6 +237,45 @@ async def release_blocked_handler(request: Request, exc: Exception) -> Response:
     )
 
 
+async def delivery_not_found_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, DeliveryNotFoundError):  # pragma: no cover
+        raise TypeError("Expected DeliveryNotFoundError")
+    return _response(
+        404,
+        ErrorPayload(
+            code="delivery_not_found",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
+async def delivery_conflict_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, DeliveryConflictError):  # pragma: no cover
+        raise TypeError("Expected DeliveryConflictError")
+    return _response(
+        409,
+        ErrorPayload(
+            code="delivery_conflict",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
+async def delivery_blocked_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, DeliveryBlockedError):  # pragma: no cover
+        raise TypeError("Expected DeliveryBlockedError")
+    return _response(
+        409,
+        ErrorPayload(
+            code="delivery_blocked",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register all public API exception contracts."""
     handlers: tuple[tuple[type[Exception], ExceptionHandler], ...] = (
@@ -244,6 +288,9 @@ def register_error_handlers(app: FastAPI) -> None:
         (ReleaseNotFoundError, release_not_found_handler),
         (ReleaseConflictError, release_conflict_handler),
         (ReleaseBlockedError, release_blocked_handler),
+        (DeliveryNotFoundError, delivery_not_found_handler),
+        (DeliveryConflictError, delivery_conflict_handler),
+        (DeliveryBlockedError, delivery_blocked_handler),
         (StarletteHTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),

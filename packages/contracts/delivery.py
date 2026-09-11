@@ -8,8 +8,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from packages.contracts.manifest import SemanticVersion, Slug
+from packages.contracts.observability import CostAttributionReport
 from packages.contracts.release import IdempotencyKey, Sha256
-from packages.contracts.runtime import AgentResponse
+from packages.contracts.runtime import AgentRequest, AgentResponse
 
 BasisPoints = Annotated[int, Field(ge=0, le=10_000)]
 
@@ -344,6 +345,84 @@ class CanaryGateDecision(BaseModel):
     evaluated_at: datetime
 
 
+class CreateCanaryRequest(BaseModel):
+    """Start tracking a zero-weight candidate on an existing route."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    idempotency_key: IdempotencyKey
+    route_id: UUID
+    expected_route_revision: int = Field(ge=1)
+    actor: str = Field(min_length=2, max_length=200)
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+
+
+class CanaryActionRequest(BaseModel):
+    """Optimistic manual canary action with server-evaluated evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    idempotency_key: IdempotencyKey
+    action: CanaryAction
+    expected_revision: int = Field(ge=1)
+    expected_route_revision: int = Field(ge=1)
+    actor: str = Field(min_length=2, max_length=200)
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+    comparison: ShadowComparison | None = None
+    telemetry_healthy: bool = False
+    guardrail_policy: CanaryGuardrailPolicy = Field(default_factory=CanaryGuardrailPolicy)
+
+
+class CanaryRollout(BaseModel):
+    """Durable rollout state tied to immutable stable and candidate releases."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    route_id: UUID
+    stable_release_id: UUID
+    candidate_release_id: UUID
+    progress: CanaryProgress
+    revision: int = Field(ge=1)
+    route_revision: int = Field(ge=1)
+    latest_gate: CanaryGateDecision | None = None
+    created_by: str
+    created_at: datetime
+    updated_by: str
+    updated_at: datetime
+
+
+class CanaryResult(BaseModel):
+    """Creation result distinguishing a new rollout from an idempotent replay."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    created: bool
+    rollout: CanaryRollout
+
+
+class CanaryEvent(BaseModel):
+    """Append-only audit record for one accepted rollout action."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    rollout_id: UUID
+    event_type: str
+    action: CanaryAction | None
+    actor: str
+    reason: str
+    idempotency_key: IdempotencyKey
+    previous_progress: CanaryProgress | None
+    new_progress: CanaryProgress
+    previous_revision: int | None
+    new_revision: int = Field(ge=1)
+    previous_route_revision: int
+    new_route_revision: int
+    gate: CanaryGateDecision | None
+    occurred_at: datetime
+
+
 class ComplexitySignal(BaseModel):
     """One deterministic feature contributing to a complexity score."""
 
@@ -411,3 +490,35 @@ class CostRouteDecision(BaseModel):
     alternative_cost_usd: float = Field(ge=0)
     estimated_savings_usd: float
     reason: str = Field(min_length=3, max_length=500)
+
+
+class CostRecommendationRequest(BaseModel):
+    """Bounded request for an explainable model-cost recommendation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request: AgentRequest
+    policy: CostRoutingPolicy
+    requested_output_tokens: int = Field(default=800, ge=1, le=100_000)
+
+
+class GuardrailPreviewRequest(BaseModel):
+    """Preview promotion policy without mutating rollout state."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    comparison: ShadowComparison | None = None
+    telemetry_healthy: bool = False
+    policy: CanaryGuardrailPolicy = Field(default_factory=CanaryGuardrailPolicy)
+
+
+class DeliveryOverview(BaseModel):
+    """Operator dashboard payload for routes, canaries, guardrails, and spend."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    generated_at: datetime
+    routes: list[TrafficRoute]
+    canaries: list[CanaryRollout]
+    guardrail_policy: CanaryGuardrailPolicy
+    costs: CostAttributionReport

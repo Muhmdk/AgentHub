@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -94,6 +95,89 @@ class TrafficRouteEventRecord(RegistryBase):
     new_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     previous_allocation: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     new_allocation: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class CanaryRolloutRecord(RegistryBase):
+    __tablename__ = "canary_rollouts"
+    __table_args__ = (
+        UniqueConstraint("create_idempotency_key", name="uq_canary_create_key"),
+        UniqueConstraint("route_id", "candidate_release_id", name="uq_canary_route_candidate"),
+        CheckConstraint(
+            "state IN ('pending', '5_percent', '25_percent', '50_percent', "
+            "'100_percent', 'paused', 'rolled_back', 'completed')",
+            name="ck_canary_state",
+        ),
+        CheckConstraint("revision >= 1", name="ck_canary_revision"),
+        CheckConstraint("length(create_fingerprint) = 64", name="ck_canary_fingerprint"),
+        CheckConstraint(
+            "(state = 'paused' AND resume_state IN "
+            "('pending', '5_percent', '25_percent', '50_percent', '100_percent')) OR "
+            "(state <> 'paused' AND resume_state IS NULL)",
+            name="ck_canary_resume_state",
+        ),
+        Index(
+            "uq_canary_active_route",
+            "route_id",
+            unique=True,
+            postgresql_where=text("state NOT IN ('rolled_back', 'completed')"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    route_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("traffic_routes.id", ondelete="RESTRICT"), nullable=False
+    )
+    stable_release_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("releases.id", ondelete="RESTRICT"), nullable=False
+    )
+    candidate_release_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("releases.id", ondelete="RESTRICT"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    resume_state: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    latest_gate: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    create_idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    create_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class CanaryEventRecord(RegistryBase):
+    __tablename__ = "canary_events"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_canary_event_key"),
+        CheckConstraint("length(fingerprint) = 64", name="ck_canary_event_fingerprint"),
+        CheckConstraint("new_revision >= 1", name="ck_canary_event_revision"),
+        Index("ix_canary_events_rollout_time", "rollout_id", "occurred_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    rollout_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("canary_rollouts.id", ondelete="RESTRICT"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    action: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    actor: Mapped[str] = mapped_column(String(200), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    previous_progress: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    new_progress: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    previous_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_route_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    new_route_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    gate: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
