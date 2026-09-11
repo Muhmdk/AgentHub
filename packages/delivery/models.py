@@ -1,0 +1,99 @@
+"""SQLAlchemy records for atomic routes and append-only route events."""
+
+from datetime import datetime
+from typing import Any
+from uuid import UUID, uuid4
+
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from packages.registry.database import RegistryBase
+from packages.registry.models import utc_now
+
+
+class TrafficRouteRecord(RegistryBase):
+    __tablename__ = "traffic_routes"
+    __table_args__ = (
+        UniqueConstraint("agent_name", "environment", name="uq_traffic_route_agent_environment"),
+        UniqueConstraint("create_idempotency_key", name="uq_traffic_route_create_key"),
+        CheckConstraint("environment IN ('staging', 'production')", name="ck_route_environment"),
+        CheckConstraint("revision >= 1", name="ck_route_revision"),
+        CheckConstraint(
+            "candidate_weight_basis_points BETWEEN 0 AND 10000",
+            name="ck_route_candidate_weight",
+        ),
+        CheckConstraint(
+            "candidate_release_id IS NOT NULL OR candidate_weight_basis_points = 0",
+            name="ck_route_candidate_presence",
+        ),
+        CheckConstraint(
+            "candidate_release_id IS NULL OR candidate_release_id <> stable_release_id",
+            name="ck_route_distinct_targets",
+        ),
+        CheckConstraint("length(create_fingerprint) = 64", name="ck_route_create_fingerprint"),
+        Index("ix_traffic_routes_stable_release", "stable_release_id"),
+        Index("ix_traffic_routes_candidate_release", "candidate_release_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    agent_name: Mapped[str] = mapped_column(String(63), nullable=False)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False)
+    stable_release_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("releases.id", ondelete="RESTRICT"), nullable=False
+    )
+    candidate_release_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("releases.id", ondelete="RESTRICT"), nullable=True
+    )
+    candidate_weight_basis_points: Mapped[int] = mapped_column(Integer, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    create_idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    create_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class TrafficRouteEventRecord(RegistryBase):
+    __tablename__ = "traffic_route_events"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_traffic_route_event_key"),
+        CheckConstraint("new_revision >= 1", name="ck_route_event_new_revision"),
+        CheckConstraint(
+            "previous_revision IS NULL OR previous_revision >= 1",
+            name="ck_route_event_previous_revision",
+        ),
+        CheckConstraint("length(fingerprint) = 64", name="ck_route_event_fingerprint"),
+        Index("ix_traffic_route_events_route_time", "route_id", "occurred_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    route_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("traffic_routes.id", ondelete="RESTRICT"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor: Mapped[str] = mapped_column(String(200), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    previous_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_allocation: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    new_allocation: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
