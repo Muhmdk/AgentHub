@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -23,10 +24,29 @@ from apps.api.logging import configure_logging
 from apps.api.middleware import correlation_middleware
 from apps.gateway import GatewayAuthenticator, create_gateway_router
 from apps.web import (
+    delivery_page_path,
     evaluation_page_path,
     governance_page_path,
     observability_page_path,
     registry_page_path,
+)
+from packages.contracts.delivery import (
+    CanaryActionRequest,
+    CanaryEvent,
+    CanaryGateDecision,
+    CanaryGuardrailPolicy,
+    CanaryResult,
+    CanaryRollout,
+    CostRecommendationRequest,
+    CostRouteDecision,
+    CreateCanaryRequest,
+    CreateTrafficRouteRequest,
+    DeliveryOverview,
+    GuardrailPreviewRequest,
+    ReplaceTrafficRouteRequest,
+    TrafficRoute,
+    TrafficRouteEvent,
+    TrafficRouteResult,
 )
 from packages.contracts.evaluation import (
     EvaluationRunReport,
@@ -41,7 +61,7 @@ from packages.contracts.governance import (
 )
 from packages.contracts.health import HealthResponse, VersionResponse
 from packages.contracts.manifest import AgentManifest
-from packages.contracts.observability import AgentHealth, FleetHealth
+from packages.contracts.observability import AgentHealth, CostAttributionReport, FleetHealth
 from packages.contracts.registry import (
     AgentSummary,
     AgentVersionView,
@@ -59,6 +79,10 @@ from packages.contracts.release import (
 )
 from packages.contracts.retrieval import GroundedAgentResponse
 from packages.contracts.runtime import AgentRequest, AgentResponse
+from packages.delivery.canary_repository import CanaryRepository, CanaryStore
+from packages.delivery.cost_routing import CostAwareModelRouter
+from packages.delivery.guardrails import CanaryGuardrailEvaluator
+from packages.delivery.repository import DeliveryRepository, DeliveryStore
 from packages.evaluation.repository import EvaluationRepository, EvaluationStore
 from packages.evaluation.service import EvaluationService
 from packages.governance import (
@@ -95,6 +119,8 @@ def create_app(
     registry_store: RegistryStore | None = None,
     evaluation_store: EvaluationStore | None = None,
     release_store: ReleaseStore | None = None,
+    delivery_store: DeliveryStore | None = None,
+    canary_store: CanaryStore | None = None,
     telemetry_instance: Telemetry | None = None,
     policy_engine: PolicyEngine | None = None,
     governance_audit_store: GovernanceAuditStore | None = None,
@@ -254,6 +280,12 @@ def create_app(
     else:  # pragma: no cover - custom stores must be supplied together
         raise ValueError("A release store is required without a database")
     release_service = ReleaseService(registry, evaluations, releases)
+    routes = delivery_store
+    canaries = canary_store
+    if routes is None and registry_database is not None:
+        routes = DeliveryRepository(registry_database)
+    if canaries is None and registry_database is not None:
+        canaries = CanaryRepository(registry_database)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -280,6 +312,8 @@ def create_app(
     app.state.registry = registry
     app.state.evaluations = evaluations
     app.state.releases = releases
+    app.state.delivery_routes = routes
+    app.state.canaries = canaries
     app.state.database = registry_database
     app.state.policy_engine = active_policy_engine
     app.state.governance_audit = active_audit_store
@@ -567,6 +601,164 @@ def create_app(
     )
     async def release_notes(release_id: UUID) -> ReleaseNotes:
         return await asyncio.to_thread(release_service.notes, release_id)
+
+    def require_routes() -> DeliveryStore:
+        if routes is None:
+            raise HTTPException(status_code=503, detail="Delivery route store is unavailable")
+        return routes
+
+    def require_canaries() -> CanaryStore:
+        if canaries is None:
+            raise HTTPException(status_code=503, detail="Canary store is unavailable")
+        return canaries
+
+    @app.post(
+        "/delivery/routes",
+        response_model=TrafficRouteResult,
+        tags=["delivery"],
+    )
+    async def create_traffic_route(route: CreateTrafficRouteRequest) -> TrafficRouteResult:
+        return await asyncio.to_thread(require_routes().create, route)
+
+    @app.get(
+        "/delivery/routes",
+        response_model=list[TrafficRoute],
+        tags=["delivery"],
+    )
+    async def list_traffic_routes(agent_name: str | None = None) -> list[TrafficRoute]:
+        return await asyncio.to_thread(require_routes().list_routes, agent_name)
+
+    @app.get(
+        "/delivery/routes/{route_id}",
+        response_model=TrafficRoute,
+        tags=["delivery"],
+    )
+    async def get_traffic_route(route_id: UUID) -> TrafficRoute:
+        return await asyncio.to_thread(require_routes().get, route_id)
+
+    @app.put(
+        "/delivery/routes/{route_id}",
+        response_model=TrafficRoute,
+        tags=["delivery"],
+    )
+    async def replace_traffic_route(
+        route_id: UUID, change: ReplaceTrafficRouteRequest
+    ) -> TrafficRoute:
+        return await asyncio.to_thread(require_routes().replace, route_id, change)
+
+    @app.get(
+        "/delivery/routes/{route_id}/events",
+        response_model=list[TrafficRouteEvent],
+        tags=["delivery"],
+    )
+    async def list_traffic_route_events(route_id: UUID) -> list[TrafficRouteEvent]:
+        return await asyncio.to_thread(require_routes().events, route_id)
+
+    @app.post(
+        "/delivery/canaries",
+        response_model=CanaryResult,
+        tags=["delivery"],
+    )
+    async def create_canary(request: CreateCanaryRequest) -> CanaryResult:
+        return await asyncio.to_thread(require_canaries().create, request)
+
+    @app.get(
+        "/delivery/canaries",
+        response_model=list[CanaryRollout],
+        tags=["delivery"],
+    )
+    async def list_canaries(route_id: UUID | None = None) -> list[CanaryRollout]:
+        return await asyncio.to_thread(require_canaries().list_rollouts, route_id)
+
+    @app.get(
+        "/delivery/canaries/{rollout_id}",
+        response_model=CanaryRollout,
+        tags=["delivery"],
+    )
+    async def get_canary(rollout_id: UUID) -> CanaryRollout:
+        return await asyncio.to_thread(require_canaries().get, rollout_id)
+
+    @app.post(
+        "/delivery/canaries/{rollout_id}/actions",
+        response_model=CanaryRollout,
+        tags=["delivery"],
+    )
+    async def act_on_canary(rollout_id: UUID, action: CanaryActionRequest) -> CanaryRollout:
+        return await asyncio.to_thread(require_canaries().transition, rollout_id, action)
+
+    @app.get(
+        "/delivery/canaries/{rollout_id}/events",
+        response_model=list[CanaryEvent],
+        tags=["delivery"],
+    )
+    async def list_canary_events(rollout_id: UUID) -> list[CanaryEvent]:
+        return await asyncio.to_thread(require_canaries().events, rollout_id)
+
+    @app.post(
+        "/delivery/guardrails/preview",
+        response_model=CanaryGateDecision,
+        tags=["delivery"],
+    )
+    async def preview_guardrails(preview: GuardrailPreviewRequest) -> CanaryGateDecision:
+        return CanaryGuardrailEvaluator.evaluate(
+            preview.comparison,
+            preview.policy,
+            evaluated_at=datetime.now(UTC),
+            telemetry_healthy=preview.telemetry_healthy,
+        )
+
+    @app.post(
+        "/delivery/cost-recommendation",
+        response_model=CostRouteDecision,
+        tags=["delivery"],
+    )
+    async def cost_recommendation(
+        recommendation: CostRecommendationRequest,
+    ) -> CostRouteDecision:
+        return CostAwareModelRouter.select(
+            recommendation.request,
+            recommendation.policy,
+            requested_output_tokens=recommendation.requested_output_tokens,
+        )
+
+    def current_costs(window_minutes: int) -> CostAttributionReport:
+        window_end = datetime.now(UTC)
+        return telemetry.cost_ledger.report(
+            window_start=window_end - timedelta(minutes=window_minutes),
+            window_end=window_end,
+        )
+
+    @app.get(
+        "/delivery/costs",
+        response_model=CostAttributionReport,
+        tags=["delivery"],
+    )
+    async def delivery_costs(
+        window_minutes: Annotated[int, Query(ge=1, le=43_200)] = 60,
+    ) -> CostAttributionReport:
+        return current_costs(window_minutes)
+
+    @app.get(
+        "/delivery/overview",
+        response_model=DeliveryOverview,
+        tags=["delivery"],
+    )
+    async def delivery_overview() -> DeliveryOverview:
+        delivery_routes, rollouts = await asyncio.gather(
+            asyncio.to_thread(require_routes().list_routes),
+            asyncio.to_thread(require_canaries().list_rollouts),
+        )
+        return DeliveryOverview(
+            generated_at=datetime.now(UTC),
+            routes=delivery_routes,
+            canaries=rollouts,
+            guardrail_policy=CanaryGuardrailPolicy(),
+            costs=current_costs(60),
+        )
+
+    @app.get("/delivery", response_class=FileResponse, include_in_schema=False)
+    async def delivery_console() -> FileResponse:
+        return FileResponse(delivery_page_path())
 
     async def current_fleet_health() -> FleetHealth:
         summaries = await asyncio.to_thread(registry.list_agents)

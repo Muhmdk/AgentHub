@@ -30,7 +30,13 @@ from opentelemetry.trace import Span, SpanKind, Status, StatusCode
 from opentelemetry.util.types import AttributeValue
 
 from packages.observability.conventions import Attribute
-from packages.observability.privacy import AttributeMapping, metric_attributes, span_attributes
+from packages.observability.cost import CostLedger
+from packages.observability.privacy import (
+    AttributeMapping,
+    bounded_dimension,
+    metric_attributes,
+    span_attributes,
+)
 
 logger = logging.getLogger("agenthub.observability")
 
@@ -100,9 +106,11 @@ class Telemetry:
         span_exporter: SpanExporter | None = None,
         metric_reader: MetricReader | None = None,
         observations: ObservationStore | None = None,
+        cost_ledger: CostLedger | None = None,
     ) -> None:
         self.config = config
         self.observations = observations or ObservationStore()
+        self.cost_ledger = cost_ledger or CostLedger()
         self._trace_lock = Lock()
         self._last_trace_ids: dict[str, str] = {}
         resource = Resource.create(
@@ -282,6 +290,7 @@ class Telemetry:
         cost_usd: float,
     ) -> None:
         labels = metric_attributes(attributes)
+        labels[Attribute.DEPLOYMENT_ENVIRONMENT.value] = bounded_dimension(self.config.environment)
         self.model_tokens.add(
             input_tokens,
             {**labels, Attribute.TOKEN_TYPE.value: "input"},
@@ -293,6 +302,18 @@ class Telemetry:
         self.model_cost.add(cost_usd, labels)
         self.observations.record("model.tokens", input_tokens + output_tokens, labels)
         self.observations.record("model.cost_usd", cost_usd, labels)
+        self.cost_ledger.record(
+            agent_name=str(labels.get(Attribute.AGENT_NAME.value, "unknown")),
+            agent_version=str(labels.get(Attribute.AGENT_VERSION.value, "unknown")),
+            model=str(labels.get(Attribute.MODEL_DEPLOYMENT.value, "unknown")),
+            environment=str(
+                labels.get(Attribute.DEPLOYMENT_ENVIRONMENT.value, self.config.environment)
+            ),
+            team=str(labels.get(Attribute.TEAM.value, "unknown")),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+        )
 
     def record_evaluation(
         self,

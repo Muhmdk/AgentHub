@@ -1,5 +1,6 @@
-"""Versioned SLO, burn-rate, and fleet-health API contracts."""
+"""Versioned SLO, burn-rate, fleet-health, and cost attribution contracts."""
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
@@ -91,3 +92,34 @@ class FleetHealth(BaseModel):
     profile_id: Slug
     profile_version: SemanticVersion
     agents: list[AgentHealth]
+
+
+class CostAttributionRow(BaseModel):
+    """Aggregated model usage across the required operational dimensions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    agent_name: str = Field(min_length=1, max_length=100)
+    agent_version: str = Field(min_length=1, max_length=64)
+    model: str = Field(min_length=1, max_length=200)
+    environment: str = Field(min_length=1, max_length=64)
+    team: str = Field(min_length=1, max_length=100)
+    invocation_count: int = Field(ge=1)
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    cost_usd: float = Field(ge=0)
+
+
+class CostAttributionReport(BaseModel):
+    """Bounded cost rollup with totals and its reporting window."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    window_start: datetime
+    window_end: datetime
+    generated_at: datetime
+    rows: list[CostAttributionRow]
+    invocation_count: int = Field(ge=0)
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    cost_usd: float = Field(ge=0)
