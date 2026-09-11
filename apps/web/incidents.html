@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AgentHub Incident Investigation</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #100c0b; color: #fff8f1; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 82% -8%, #552419 0, #100c0b 40%); }
+      main { width: min(1320px, calc(100% - 36px)); margin: auto; padding: 44px 0 72px; }
+      header { display: grid; grid-template-columns: 1fr minmax(280px, 450px); gap: 28px; align-items: end; }
+      .eyebrow { color: #fb923c; font: 700 .72rem/1 ui-monospace, monospace; letter-spacing: .18em; }
+      h1 { margin: 10px 0 0; font-size: clamp(2.6rem, 7vw, 5.8rem); line-height: .9; letter-spacing: -.065em; }
+      h2, h3, p { margin-top: 0; }
+      .lede, .muted, #status { color: #bca99f; line-height: 1.55; }
+      #status { min-height: 24px; margin: 24px 0 14px; }
+      .layout { display: grid; grid-template-columns: minmax(260px, .7fr) minmax(0, 1.8fr); gap: 16px; }
+      .panel, article { border: 1px solid #4d3028; background: rgba(29, 19, 16, .9); box-shadow: 0 24px 80px rgba(0,0,0,.24); }
+      .panel { padding: 22px; border-radius: 15px; }
+      .detail { display: grid; gap: 16px; }
+      .panel-head, .row { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+      .panel-head { margin-bottom: 16px; }
+      h2 { font-size: 1.12rem; } h3 { font-size: .98rem; }
+      .tag { border: 1px solid #704335; border-radius: 999px; padding: 5px 9px; color: #fdba74; font: .68rem ui-monospace, monospace; text-transform: uppercase; }
+      .incident { width: 100%; margin-bottom: 9px; border: 1px solid #513229; border-radius: 10px; padding: 14px; color: inherit; background: #201512; text-align: left; cursor: pointer; }
+      .incident:hover, .incident[aria-current="true"] { border-color: #fb923c; background: #2c1913; }
+      .incident strong, .incident span { display: block; }
+      .incident span { margin-top: 7px; color: #a99287; font: .72rem/1.4 ui-monospace, monospace; }
+      .hero { border-left: 4px solid #fb923c; padding-left: 18px; }
+      .hero h2 { font-size: clamp(1.35rem, 3vw, 2rem); margin-bottom: 8px; }
+      .claims { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      article { border-radius: 10px; padding: 15px; }
+      article p { margin: 8px 0 0; color: #d8c8bf; line-height: 1.5; }
+      .citation { margin-top: 9px; color: #aa9084; font: .69rem/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+      .timeline { position: relative; display: grid; gap: 0; }
+      .timeline article { margin-left: 15px; border-radius: 0; border-width: 0 0 0 1px; box-shadow: none; background: transparent; padding: 0 0 22px 22px; }
+      .timeline article::before { content: ""; position: absolute; left: 10px; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: #fb923c; }
+      .timeline time { color: #fb923c; font: .68rem ui-monospace, monospace; }
+      .empty { padding: 20px 0; color: #8f776c; }
+      .warning { color: #fecaca; }
+      button.action { border: 1px solid #a64b2a; border-radius: 8px; padding: 9px 12px; color: #fff7ed; background: #7c2d12; cursor: pointer; }
+      button.action:hover { background: #9a3412; }
+      @media (max-width: 860px) { header, .layout { grid-template-columns: 1fr; } .claims { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div><div class="eyebrow">AGENTHUB / RECOVERY CONTROL</div><h1>Incident investigation</h1></div>
+        <p class="lede">Follow the trigger, inspect immutable evidence, review source-cited findings, and confirm whether a known-good rollback recovered production.</p>
+      </header>
+      <p id="status" role="status">Loading incidents…</p>
+      <div class="layout">
+        <aside class="panel">
+          <div class="panel-head"><h2>Incident queue</h2><span class="tag" id="incident-count">0</span></div>
+          <div id="incidents"></div>
+        </aside>
+        <div class="detail" id="detail" hidden>
+          <section class="panel hero">
+            <div class="row"><div><h2 id="title"></h2><p id="identity" class="muted"></p></div><span class="tag" id="state"></span></div>
+            <p id="cause"></p>
+            <div><button type="button" class="action" id="rollback">Approve / request known-good rollback</button></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Source-cited findings</h2><span class="tag">deterministic</span></div>
+            <div id="claims" class="claims"></div>
+            <p id="missing" class="warning"></p>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Recovery operations</h2><span class="tag">policy bound</span></div>
+            <div id="rollbacks" class="claims"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Evidence timeline</h2><span class="tag" id="evidence-count"></span></div>
+            <div id="timeline" class="timeline"></div>
+          </section>
+        </div>
+      </div>
+    </main>
+    <script>
+      const byId = id => document.getElementById(id);
+      const node = (name, value, className) => { const item = document.createElement(name); item.textContent = value; if (className) item.className = className; return item; };
+      let selected = null;
+      let selectedView = null;
+
+      function incidentButton(incident) {
+        const button = node("button", "", "incident");
+        button.type = "button"; button.dataset.id = incident.id;
+        button.append(node("strong", incident.title), node("span", `${incident.severity} · ${incident.status} · ${new Date(incident.detected_at).toLocaleString()}`));
+        button.addEventListener("click", () => selectIncident(incident.id));
+        return button;
+      }
+
+      function claimCard(claim) {
+        const card = document.createElement("article");
+        const head = node("div", "", "row");
+        head.append(node("h3", claim.kind.replaceAll("_", " ")), node("span", `${Math.round(claim.confidence * 100)}%`, "tag"));
+        card.append(head, node("p", claim.statement));
+        claim.citations.forEach(item => card.append(node("div", `${item.source_ref} · ${item.content_hash.slice(0, 12)}`, "citation")));
+        return card;
+      }
+
+      function rollbackCard(operation) {
+        const card = document.createElement("article");
+        const head = node("div", "", "row");
+        head.append(node("h3", `${operation.mode} attempt ${operation.attempt_number}`), node("span", operation.status, "tag"));
+        card.append(head, node("p", operation.reason), node("div", `release ${operation.target_release_id}`, "citation"));
+        if (operation.recovery_decision) card.append(node("p", operation.recovery_decision.reasons.join(" · "), operation.recovery_decision.outcome === "escalated" ? "warning" : "muted"));
+        return card;
+      }
+
+      function timelineCard(entry) {
+        const card = document.createElement("article");
+        card.append(node("time", new Date(entry.normalized_at).toLocaleString()), node("h3", `${entry.category} / ${entry.kind}`), node("p", entry.summary), node("div", `${entry.source_ref} · ${entry.content_hash.slice(0, 12)}`, "citation"));
+        return card;
+      }
+
+      async function selectIncident(id) {
+        selected = id;
+        document.querySelectorAll(".incident").forEach(item => item.setAttribute("aria-current", String(item.dataset.id === id)));
+        byId("status").textContent = "Loading immutable evidence and recovery state…";
+        const response = await fetch(`/incidents/${id}/investigation`);
+        if (!response.ok) throw new Error("Incident investigation API is unavailable");
+        const view = await response.json(); const analysis = view.analysis;
+        selectedView = view;
+        byId("detail").hidden = false; byId("title").textContent = view.incident.title;
+        byId("identity").textContent = `${view.incident.agent_name} · ${view.incident.environment} · revision ${view.incident.revision}`;
+        byId("state").textContent = view.incident.status;
+        byId("rollback").hidden = !view.incident.route_id || !view.incident.canary_rollout_id || ["resolved", "escalated"].includes(view.incident.status);
+        byId("cause").textContent = analysis.probable_cause ? analysis.probable_cause.statement : "No probable cause can be supported by the stored evidence yet.";
+        const claims = [...analysis.findings, ...analysis.counter_evidence];
+        byId("claims").replaceChildren(...(claims.length ? claims.map(claimCard) : [node("p", "No supported findings yet.", "empty")]));
+        byId("missing").textContent = analysis.missing_evidence.length ? `Missing evidence: ${analysis.missing_evidence.join(", ")}` : "";
+        byId("rollbacks").replaceChildren(...(view.rollbacks.length ? view.rollbacks.map(rollbackCard) : [node("p", "No rollback operation has been requested.", "empty")]));
+        byId("timeline").replaceChildren(...view.timeline.entries.map(timelineCard));
+        byId("evidence-count").textContent = `${view.timeline.entries.length} events`;
+        byId("status").textContent = `Updated ${new Date(view.timeline.generated_at).toLocaleString()} · every finding links to stored evidence`;
+      }
+
+      byId("rollback").addEventListener("click", async () => {
+        if (!selectedView) return;
+        byId("status").textContent = "Evaluating persisted evidence and rollback policy…";
+        try {
+          const response = await fetch(`/incidents/${selectedView.incident.id}/rollback`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ idempotency_key: `console-rollback-${selectedView.incident.id}`, expected_incident_revision: selectedView.incident.revision, actor: "operator-console", reason: "Operator requested the immutable known-good recovery path", human_approved: true })
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error?.message || "Rollback policy blocked the request");
+          byId("status").textContent = `Rollback ${result.operation.status}; recovery verification must still pass.`;
+          await load();
+        } catch (error) { byId("status").textContent = error.message; }
+      });
+
+      async function load() {
+        const response = await fetch("/incidents");
+        if (!response.ok) throw new Error("Incident API is unavailable");
+        const incidents = await response.json(); byId("incident-count").textContent = incidents.length;
+        byId("incidents").replaceChildren(...(incidents.length ? incidents.map(incidentButton) : [node("p", "No operational incidents detected.", "empty")]));
+        if (incidents.length) await selectIncident(selected && incidents.some(item => item.id === selected) ? selected : incidents[0].id);
+        else byId("status").textContent = "No incidents require investigation.";
+      }
+      load().catch(error => byId("status").textContent = error.message);
+      setInterval(() => load().catch(error => byId("status").textContent = error.message), 30000);
+    </script>
+  </body>
+</html>

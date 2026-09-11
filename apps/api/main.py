@@ -27,6 +27,7 @@ from apps.web import (
     delivery_page_path,
     evaluation_page_path,
     governance_page_path,
+    incident_page_path,
     observability_page_path,
     registry_page_path,
 )
@@ -37,6 +38,7 @@ from packages.contracts.delivery import (
     CanaryGuardrailPolicy,
     CanaryResult,
     CanaryRollout,
+    CanaryState,
     CostRecommendationRequest,
     CostRouteDecision,
     CreateCanaryRequest,
@@ -60,6 +62,21 @@ from packages.contracts.governance import (
     GovernancePolicyView,
 )
 from packages.contracts.health import HealthResponse, VersionResponse
+from packages.contracts.incident import (
+    CoordinatedRollbackResult,
+    EvidenceCollectionResult,
+    EvidenceInput,
+    ExecuteIncidentRollbackRequest,
+    Incident,
+    IncidentDetection,
+    IncidentEvidence,
+    IncidentInvestigationView,
+    IncidentTimeline,
+    IncidentTrigger,
+    ObserveIncidentSignalRequest,
+    PrepareRollbackRequest,
+    RollbackPolicyInput,
+)
 from packages.contracts.manifest import AgentManifest
 from packages.contracts.observability import AgentHealth, CostAttributionReport, FleetHealth
 from packages.contracts.registry import (
@@ -99,6 +116,17 @@ from packages.governance import (
     PolicyEngine,
     agent_policy_profiles,
 )
+from packages.incidents.analysis import DeterministicIncidentAnalyzer
+from packages.incidents.coordinator import RollbackCoordinator
+from packages.incidents.evidence_repository import (
+    IncidentEvidenceRepository,
+    IncidentEvidenceStore,
+)
+from packages.incidents.repository import IncidentRepository, IncidentStore
+from packages.incidents.rollback import KnownGoodRollbackExecutor, KnownGoodRollbackPlanner
+from packages.incidents.rollback_repository import RollbackOperationRepository
+from packages.incidents.service import IncidentService
+from packages.incidents.timeline import IncidentTimelineBuilder
 from packages.observability.conventions import Attribute
 from packages.observability.slos import fleet_health
 from packages.observability.telemetry import Telemetry, TelemetryConfig
@@ -124,6 +152,8 @@ def create_app(
     telemetry_instance: Telemetry | None = None,
     policy_engine: PolicyEngine | None = None,
     governance_audit_store: GovernanceAuditStore | None = None,
+    incident_store: IncidentStore | None = None,
+    incident_evidence_store: IncidentEvidenceStore | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
     app_settings = settings or load_settings()
@@ -286,6 +316,15 @@ def create_app(
         routes = DeliveryRepository(registry_database)
     if canaries is None and registry_database is not None:
         canaries = CanaryRepository(registry_database)
+    incidents = incident_store
+    evidence = incident_evidence_store
+    rollbacks: RollbackOperationRepository | None = None
+    if incidents is None and registry_database is not None:
+        incidents = IncidentRepository(registry_database)
+    if evidence is None and registry_database is not None:
+        evidence = IncidentEvidenceRepository(registry_database)
+    if registry_database is not None:
+        rollbacks = RollbackOperationRepository(registry_database)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -317,6 +356,8 @@ def create_app(
     app.state.database = registry_database
     app.state.policy_engine = active_policy_engine
     app.state.governance_audit = active_audit_store
+    app.state.incidents = incidents
+    app.state.incident_evidence = evidence
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
 
@@ -759,6 +800,223 @@ def create_app(
     @app.get("/delivery", response_class=FileResponse, include_in_schema=False)
     async def delivery_console() -> FileResponse:
         return FileResponse(delivery_page_path())
+
+    def require_incidents() -> IncidentStore:
+        if incidents is None:
+            raise HTTPException(status_code=503, detail="Incident store is unavailable")
+        return incidents
+
+    def require_incident_evidence() -> IncidentEvidenceStore:
+        if evidence is None:
+            raise HTTPException(status_code=503, detail="Incident evidence store is unavailable")
+        return evidence
+
+    @app.post(
+        "/incidents/signals",
+        response_model=IncidentDetection,
+        tags=["incidents"],
+    )
+    async def observe_incident_signal(
+        observation: ObserveIncidentSignalRequest,
+    ) -> IncidentDetection:
+        service = IncidentService(require_incidents())
+        return await asyncio.to_thread(service.observe, observation)
+
+    @app.get("/incidents", response_model=list[Incident], tags=["incidents"])
+    async def list_incidents(agent_name: str | None = None) -> list[Incident]:
+        return await asyncio.to_thread(require_incidents().list_incidents, agent_name)
+
+    @app.get("/incidents/{incident_id}", response_model=Incident, tags=["incidents"])
+    async def get_incident(incident_id: UUID) -> Incident:
+        return await asyncio.to_thread(require_incidents().get, incident_id)
+
+    @app.get(
+        "/incidents/{incident_id}/triggers",
+        response_model=list[IncidentTrigger],
+        tags=["incidents"],
+    )
+    async def list_incident_triggers(incident_id: UUID) -> list[IncidentTrigger]:
+        return await asyncio.to_thread(require_incidents().triggers, incident_id)
+
+    @app.post(
+        "/incidents/{incident_id}/evidence",
+        response_model=EvidenceCollectionResult,
+        tags=["incidents"],
+    )
+    async def append_incident_evidence(
+        incident_id: UUID,
+        item: EvidenceInput,
+        actor: Annotated[
+            str,
+            Header(alias="X-AgentHub-Actor", min_length=2, max_length=200),
+        ],
+    ) -> EvidenceCollectionResult:
+        return await asyncio.to_thread(require_incident_evidence().append, incident_id, item, actor)
+
+    @app.get(
+        "/incidents/{incident_id}/evidence",
+        response_model=list[IncidentEvidence],
+        tags=["incidents"],
+    )
+    async def list_incident_evidence(incident_id: UUID) -> list[IncidentEvidence]:
+        return await asyncio.to_thread(require_incident_evidence().list_evidence, incident_id)
+
+    @app.get(
+        "/incidents/{incident_id}/timeline",
+        response_model=IncidentTimeline,
+        tags=["incidents"],
+    )
+    async def incident_timeline(incident_id: UUID) -> IncidentTimeline:
+        trigger_items, evidence_items = await asyncio.gather(
+            asyncio.to_thread(require_incidents().triggers, incident_id),
+            asyncio.to_thread(require_incident_evidence().list_evidence, incident_id),
+        )
+        return IncidentTimelineBuilder().build(
+            incident_id,
+            trigger_items,
+            evidence_items,
+            generated_at=datetime.now(UTC),
+        )
+
+    @app.get(
+        "/incidents/{incident_id}/investigation",
+        response_model=IncidentInvestigationView,
+        tags=["incidents"],
+    )
+    async def incident_investigation(incident_id: UUID) -> IncidentInvestigationView:
+        incident, trigger_items, evidence_items = await asyncio.gather(
+            asyncio.to_thread(require_incidents().get, incident_id),
+            asyncio.to_thread(require_incidents().triggers, incident_id),
+            asyncio.to_thread(require_incident_evidence().list_evidence, incident_id),
+        )
+        generated_at = datetime.now(UTC)
+        timeline = IncidentTimelineBuilder().build(
+            incident_id,
+            trigger_items,
+            evidence_items,
+            generated_at=generated_at,
+        )
+        analysis = DeterministicIncidentAnalyzer().analyze(
+            incident_id,
+            timeline,
+            evidence_items,
+            generated_at=generated_at,
+        )
+        operations = (
+            await asyncio.to_thread(rollbacks.list_for_incident, incident_id)
+            if rollbacks is not None
+            else []
+        )
+        return IncidentInvestigationView(
+            incident=incident,
+            timeline=timeline,
+            analysis=analysis,
+            rollbacks=operations,
+        )
+
+    @app.post(
+        "/incidents/{incident_id}/rollback",
+        response_model=CoordinatedRollbackResult,
+        tags=["incidents"],
+    )
+    async def execute_incident_rollback(
+        incident_id: UUID,
+        intent: ExecuteIncidentRollbackRequest,
+    ) -> CoordinatedRollbackResult:
+        if rollbacks is None:
+            raise HTTPException(status_code=503, detail="Rollback store is unavailable")
+        route_store = require_routes()
+        canary_store = require_canaries()
+        incident, trigger_items, evidence_items = await asyncio.gather(
+            asyncio.to_thread(require_incidents().get, incident_id),
+            asyncio.to_thread(require_incidents().triggers, incident_id),
+            asyncio.to_thread(require_incident_evidence().list_evidence, incident_id),
+        )
+        if incident.revision != intent.expected_incident_revision:
+            raise HTTPException(status_code=409, detail="Incident revision is stale")
+        if incident.route_id is None or incident.canary_rollout_id is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Incident has no active canary rollback lineage",
+            )
+        route, canary = await asyncio.gather(
+            asyncio.to_thread(route_store.get, incident.route_id),
+            asyncio.to_thread(canary_store.get, incident.canary_rollout_id),
+        )
+        target = await asyncio.to_thread(releases.get, route.allocation.stable.release_id)
+        generated_at = datetime.now(UTC)
+        timeline = IncidentTimelineBuilder().build(
+            incident.id,
+            trigger_items,
+            evidence_items,
+            generated_at=generated_at,
+        )
+        analysis = DeterministicIncidentAnalyzer().analyze(
+            incident.id,
+            timeline,
+            evidence_items,
+            generated_at=generated_at,
+        )
+        active_states = {
+            CanaryState.PENDING,
+            CanaryState.FIVE_PERCENT,
+            CanaryState.TWENTY_FIVE_PERCENT,
+            CanaryState.FIFTY_PERCENT,
+            CanaryState.ONE_HUNDRED_PERCENT,
+            CanaryState.PAUSED,
+        }
+        sibling_rollouts = await asyncio.to_thread(canary_store.list_rollouts, route.id)
+        inputs = RollbackPolicyInput(
+            canary_active=canary.progress.state in active_states,
+            guardrail_breached=any(
+                trigger.trigger_type.value == "canary_guardrail_failure"
+                for trigger in trigger_items
+            ),
+            evidence_count=len(evidence_items),
+            concurrent_rollout=any(
+                item.id != canary.id and item.progress.state in active_states
+                for item in sibling_rollouts
+            ),
+            ambiguous_cause=analysis.probable_cause is None,
+            includes_data_migration=any(
+                bool(item.attributes.get("includes_data_migration")) for item in evidence_items
+            ),
+            high_risk=any(bool(item.attributes.get("high_risk")) for item in evidence_items),
+            human_approved=intent.human_approved,
+            evaluated_at=generated_at,
+        )
+        command = KnownGoodRollbackPlanner.prepare(
+            incident,
+            route,
+            target,
+            PrepareRollbackRequest(
+                idempotency_key=intent.idempotency_key,
+                incident_id=incident.id,
+                route_id=route.id,
+                expected_route_revision=route.revision,
+                canary_rollout_id=canary.id,
+                expected_canary_revision=canary.revision,
+                target_release_id=target.id,
+                target_provenance_hash=target.provenance_hash,
+                actor=intent.actor,
+                reason=intent.reason,
+                requested_at=generated_at,
+            ),
+            canary=canary,
+        )
+        return await asyncio.to_thread(
+            RollbackCoordinator(
+                rollbacks,
+                KnownGoodRollbackExecutor(route_store, canary_store),
+            ).execute,
+            command,
+            inputs,
+            executed_at=generated_at,
+        )
+
+    @app.get("/incidents-console", response_class=FileResponse, include_in_schema=False)
+    async def incident_console() -> FileResponse:
+        return FileResponse(incident_page_path())
 
     async def current_fleet_health() -> FleetHealth:
         summaries = await asyncio.to_thread(registry.list_agents)

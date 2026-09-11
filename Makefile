@@ -9,7 +9,7 @@ OPA ?= opa
 HELM_CHART := deploy/helm/agenthub
 HELM_CI_VALUES := tests/fixtures/helm/values-ci.yaml
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security policy infra-terraform infra-helm infra-validate smoke-deployment up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security policy infra-terraform infra-helm infra-validate smoke-deployment up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping demo-incident-fault ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -110,6 +110,9 @@ demo-knowledge:
 
 demo-shopping:
 	$(BIN)/python -m agents.shopping
+
+demo-incident-fault:
+	$(BIN)/python -m scripts.inject_top_k_regression
 
 ingest-corpus:
 	$(BIN)/python -m agents.shared.ingest

@@ -56,5 +56,5 @@ records.
 
 Capture the workflow URL, release ID, source SHA, digest, failed gate reasons, last state and
 revision, approver decision, remediation owner, and whether the stable production digest changed.
-If production traffic was affected, continue with the incident workflow introduced in the later
-incident-operations phase; until then, retain the previous known-good digest and stop promotion.
+If production traffic was affected, retain the previous known-good digest, stop promotion, and
+continue with the [incident investigation and recovery runbook](incident-recovery.md).
