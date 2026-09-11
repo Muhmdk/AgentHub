@@ -19,6 +19,10 @@ class ChatModel(Protocol):
         ...
 
 
+class RetryableModelError(RuntimeError):
+    """Sanitized transient provider failure eligible for a bounded retry."""
+
+
 class DeterministicFakeModel:
     """Offline model that deterministically returns a prepared answer prompt."""
 

@@ -67,6 +67,29 @@ jobs:
       - name: Run unit, contract, integration, and selected end-to-end tests
         run: make test
 
+  policy:
+    name: Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install checksum-verified OPA
+        env:
+          OPA_VERSION: 1.17.0
+          OPA_SHA256: 5485f9c32548af84bc0bfa06a7f40a98ecc742477a7f9f24ea3556d221dc295f # pragma: allowlist secret
+        run: |
+          install_dir="${RUNNER_TEMP}/agenthub-policy-bin"
+          mkdir -p "$install_dir"
+          curl --fail --silent --show-error --location \
+            --output "$install_dir/opa" \
+            "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64"
+          echo "${OPA_SHA256}  $install_dir/opa" | sha256sum --check
+          chmod +x "$install_dir/opa"
+          echo "$install_dir" >> "$GITHUB_PATH"
+      - name: Validate governance bundle
+        run: make policy
+
   container:
     name: Container smoke test
     runs-on: ubuntu-latest
@@ -93,15 +116,17 @@ jobs:
   quality:
     name: Quality
     if: always()
-    needs: [static, tests, container]
+    needs: [static, tests, policy, container]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce required checks
         env:
           STATIC_RESULT: ${{ needs.static.result }}
           TEST_RESULT: ${{ needs.tests.result }}
+          POLICY_RESULT: ${{ needs.policy.result }}
           CONTAINER_RESULT: ${{ needs.container.result }}
         run: |
           test "$STATIC_RESULT" = success
           test "$TEST_RESULT" = success
+          test "$POLICY_RESULT" = success
           test "$CONTAINER_RESULT" = success

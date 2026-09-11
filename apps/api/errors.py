@@ -1,7 +1,7 @@
 """Consistent, correlation-aware HTTP error handling."""
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -29,9 +29,17 @@ def _correlation_id(request: Request) -> str:
     return getattr(request.state, "correlation_id", "unavailable")
 
 
-def _response(status_code: int, payload: ErrorPayload) -> JSONResponse:
+def _response(
+    status_code: int,
+    payload: ErrorPayload,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
     envelope = ErrorEnvelope(error=payload)
-    return JSONResponse(status_code=status_code, content=envelope.model_dump(mode="json"))
+    return JSONResponse(
+        status_code=status_code,
+        content=envelope.model_dump(mode="json"),
+        headers=headers,
+    )
 
 
 async def http_exception_handler(request: Request, exc: Exception) -> Response:
@@ -39,10 +47,16 @@ async def http_exception_handler(request: Request, exc: Exception) -> Response:
         raise TypeError("Expected StarletteHTTPException")
 
     message = exc.detail if isinstance(exc.detail, str) else "Request failed"
-    code = "not_found" if exc.status_code == 404 else "http_error"
+    code_by_status = {
+        401: "authentication_required",
+        403: "forbidden",
+        404: "not_found",
+    }
+    code = code_by_status.get(exc.status_code, "http_error")
     return _response(
         exc.status_code,
         ErrorPayload(code=code, message=message, correlation_id=_correlation_id(request)),
+        headers=exc.headers,
     )
 
 
@@ -97,6 +111,11 @@ async def agent_exception_handler(request: Request, exc: Exception) -> Response:
         AgentErrorCode.MODEL_ERROR: 502,
         AgentErrorCode.RETRIEVAL_ERROR: 502,
         AgentErrorCode.RETRIEVAL_TIMEOUT: 504,
+        AgentErrorCode.POLICY_DENIED: 403,
+        AgentErrorCode.POLICY_UNAVAILABLE: 503,
+        AgentErrorCode.RATE_LIMITED: 429,
+        AgentErrorCode.BUDGET_EXCEEDED: 429,
+        AgentErrorCode.MODEL_TIMEOUT: 504,
     }
     logger.warning("agent_request_failed", extra={"error_code": exc.code.value})
     return _response(

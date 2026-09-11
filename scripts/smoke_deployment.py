@@ -101,6 +101,7 @@ def run_smoke(
     *,
     expected_model_prefix: str | None = None,
     environment: str = "smoke",
+    caller_identity: str = "local/deployment-smoke",
 ) -> SmokeReport:
     """Verify health, registry, evaluation, and model/search agent paths."""
     live = _object(transport.request("GET", "/health/live"), "liveness")
@@ -135,12 +136,13 @@ def run_smoke(
     inventory = _object(
         transport.request(
             "POST",
-            "/agents/inventory/invoke",
+            "/gateway/agents/inventory-agent/invoke",
             payload={
                 "query": "Which Toronto stores may run low on snow shovels this weekend?",
                 "seed": 11,
                 "as_of": "2026-09-08",
             },
+            headers={"X-AgentHub-Identity": caller_identity},
         ),
         "inventory invocation",
     )
@@ -153,8 +155,9 @@ def run_smoke(
     knowledge = _object(
         transport.request(
             "POST",
-            "/agents/knowledge/invoke",
+            "/gateway/agents/knowledge-agent/invoke",
             payload={"query": "Can I return an unopened product after 20 days?", "seed": 4},
+            headers={"X-AgentHub-Identity": caller_identity},
         ),
         "knowledge invocation",
     )
@@ -227,16 +230,21 @@ def main(arguments: Sequence[str] | None = None) -> int:
         manifest_raw = json.loads(parsed.manifest.read_text(encoding="utf-8"))
         if not isinstance(manifest_raw, dict):
             raise ValueError("Manifest must contain a JSON object")
+        bearer_token = os.getenv("AGENTHUB_SMOKE_BEARER_TOKEN")
         transport = UrllibTransport(
             parsed.base_url,
             parsed.timeout_seconds,
-            os.getenv("AGENTHUB_SMOKE_BEARER_TOKEN"),
+            bearer_token,
         )
         report = run_smoke(
             transport,
             cast(dict[str, JsonValue], manifest_raw),
             expected_model_prefix=parsed.expected_model_prefix,
             environment=parsed.environment,
+            caller_identity=os.getenv(
+                "AGENTHUB_SMOKE_IDENTITY",
+                "service/deployment-smoke" if bearer_token else "local/deployment-smoke",
+            ),
         )
     except (OSError, ValueError, SmokeFailure) as exc:
         print(f"smoke failed: {exc}", file=sys.stderr)

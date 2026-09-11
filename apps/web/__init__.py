@@ -14,3 +14,7 @@ def evaluation_page_path() -> Path:
 
 def observability_page_path() -> Path:
     return Path(str(files("apps.web").joinpath("observability.html")))
+
+
+def governance_page_path() -> Path:
+    return Path(str(files("apps.web").joinpath("governance.html")))

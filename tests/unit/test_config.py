@@ -19,6 +19,7 @@ def test_settings_have_safe_local_defaults(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.environment == "local"
     assert settings.api_host == "127.0.0.1"
     assert settings.api_port == 8000
+    assert settings.gateway_service_tokens == {}
     assert settings.model_provider == "fake"
     assert settings.retrieval_provider == "local"
     assert settings.agent_max_steps == 3
@@ -27,6 +28,50 @@ def test_settings_have_safe_local_defaults(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.retrieval_timeout_seconds == 5.0
     assert settings.database_auth_mode == "password"
     assert settings.database_url.endswith("@127.0.0.1:5433/agenthub")
+
+
+@pytest.mark.unit
+def test_deployed_environment_requires_bounded_gateway_credentials() -> None:
+    with pytest.raises(ValidationError, match="Gateway service credentials are required"):
+        Settings(environment="production", _env_file=None)
+    with pytest.raises(ValidationError, match="at least 32 characters"):
+        Settings(
+            environment="production",
+            gateway_service_tokens={"service/runtime": "too-short"},
+            _env_file=None,
+        )
+    shared_token = "gateway-test-token-with-at-least-32-characters"
+    with pytest.raises(ValidationError, match="unique per identity"):
+        Settings(
+            environment="production",
+            gateway_service_tokens={
+                "service/one": shared_token,
+                "service/two": shared_token,
+            },
+            _env_file=None,
+        )
+    with pytest.raises(ValidationError, match="policy engine URL"):
+        Settings(
+            environment="production",
+            gateway_service_tokens={"service/runtime": shared_token},
+            _env_file=None,
+        )
+
+    settings = Settings(
+        environment="production",
+        gateway_service_tokens={
+            "service/runtime": "gateway-test-token-with-at-least-32-characters"
+        },
+        policy_engine_url="http://127.0.0.1:8181/v1/data/agenthub/authz/decision",
+        _env_file=None,
+    )
+
+    assert (
+        settings.gateway_service_tokens["service/runtime"]
+        .get_secret_value()
+        .startswith("gateway-test")
+    )
+    assert settings.policy_timeout_seconds == 2.0
 
 
 @pytest.mark.unit

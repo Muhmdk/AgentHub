@@ -93,6 +93,12 @@
         "environment",
         "logLevel",
         "modelProvider",
+        "modelRequestsPerMinute",
+        "modelTokensPerMinute",
+        "modelCostPerHourUsd",
+        "modelTimeoutSeconds",
+        "modelMaxAttempts",
+        "modelRetryBackoffSeconds",
         "retrievalProvider",
         "agentMaxSteps",
         "toolTimeoutSeconds",
@@ -105,17 +111,28 @@
         "azureDatabaseBootstrapIdentityClientId",
         "azureOpenAIEndpoint",
         "azureOpenAIDeployment",
+        "azureOpenAIInputCostPerMillion",
+        "azureOpenAIOutputCostPerMillion",
         "azureSearchEndpoint",
         "azureSearchIndexName",
         "otelEnabled",
         "otelExporter",
         "otelEndpoint",
-        "azureMonitorConnectionStringSecretKey"
+        "azureMonitorConnectionStringSecretKey",
+        "gatewayServiceTokensSecretKey",
+        "policyEngineUrl",
+        "policyTimeoutSeconds"
       ],
       "properties": {
         "environment": { "enum": ["local", "test", "staging", "production"] },
         "logLevel": { "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] },
         "modelProvider": { "enum": ["fake", "azure-openai"] },
+        "modelRequestsPerMinute": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "modelTokensPerMinute": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "modelCostPerHourUsd": { "type": "number", "minimum": 0, "maximum": 100000 },
+        "modelTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 120 },
+        "modelMaxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "modelRetryBackoffSeconds": { "type": "number", "minimum": 0, "maximum": 5 },
         "retrievalProvider": { "enum": ["local", "azure-search"] },
         "agentMaxSteps": { "type": "integer", "minimum": 1, "maximum": 20 },
         "toolTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0 },
@@ -128,12 +145,37 @@
         "azureDatabaseBootstrapIdentityClientId": { "type": "string" },
         "azureOpenAIEndpoint": { "type": "string" },
         "azureOpenAIDeployment": { "type": "string" },
+        "azureOpenAIInputCostPerMillion": { "type": "number", "minimum": 0 },
+        "azureOpenAIOutputCostPerMillion": { "type": "number", "minimum": 0 },
         "azureSearchEndpoint": { "type": "string" },
         "azureSearchIndexName": { "type": "string" },
         "otelEnabled": { "type": "boolean" },
         "otelExporter": { "enum": ["otlp", "azure-monitor"] },
         "otelEndpoint": { "type": "string", "minLength": 1 },
-        "azureMonitorConnectionStringSecretKey": { "type": "string", "minLength": 1 }
+        "azureMonitorConnectionStringSecretKey": { "type": "string", "minLength": 1 },
+        "gatewayServiceTokensSecretKey": { "type": "string", "minLength": 1 },
+        "policyEngineUrl": { "type": "string", "pattern": "^$|^https?://" },
+        "policyTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "image", "port", "resources"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "digest", "pullPolicy"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+          }
+        },
+        "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "resources": { "$ref": "#/definitions/resourceRequirements" }
       }
     },
     "database": {

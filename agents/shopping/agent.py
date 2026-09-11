@@ -132,6 +132,8 @@ class ShoppingAgent:
                         seed=request.seed,
                     )
                 )
+        except AgentExecutionError:
+            raise
         except Exception as exc:
             raise AgentExecutionError(
                 AgentErrorCode.MODEL_ERROR,

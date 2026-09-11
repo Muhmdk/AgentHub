@@ -27,6 +27,12 @@ runtime:
   environment: local
   logLevel: INFO
   modelProvider: fake
+  modelRequestsPerMinute: 120
+  modelTokensPerMinute: 100000
+  modelCostPerHourUsd: 10.0
+  modelTimeoutSeconds: 10.0
+  modelMaxAttempts: 2
+  modelRetryBackoffSeconds: 0.05
   retrievalProvider: local
   agentMaxSteps: 3
   toolTimeoutSeconds: 1.0
@@ -39,12 +45,32 @@ runtime:
   azureDatabaseBootstrapIdentityClientId: ""
   azureOpenAIEndpoint: ""
   azureOpenAIDeployment: ""
+  azureOpenAIInputCostPerMillion: 0.0
+  azureOpenAIOutputCostPerMillion: 0.0
   azureSearchEndpoint: ""
   azureSearchIndexName: ""
   otelEnabled: false
   otelExporter: otlp
   otelEndpoint: http://otel-collector:4318
   azureMonitorConnectionStringSecretKey: azure-monitor-connection-string # pragma: allowlist secret
+  gatewayServiceTokensSecretKey: gateway-service-tokens # pragma: allowlist secret
+  policyEngineUrl: ""
+  policyTimeoutSeconds: 2.0
+
+policy:
+  enabled: false
+  image:
+    repository: openpolicyagent/opa
+    digest: sha256:94830e998dd9df8e49a61826f1ad03d8a68d3ecd52f105e06a2adb93b459ad46
+    pullPolicy: IfNotPresent
+  port: 8181
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
 
 database:
   authMode: password

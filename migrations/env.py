@@ -7,11 +7,12 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from packages.evaluation import models as evaluation_models
+from packages.governance import models as governance_models
 from packages.registry import models as registry_models
 from packages.registry.database import RegistryBase
 from packages.release import models as release_models
 
-_MAPPED_MODELS = (evaluation_models, registry_models, release_models)
+_MAPPED_MODELS = (evaluation_models, governance_models, registry_models, release_models)
 
 config = context.config
 if config.config_file_name is not None:

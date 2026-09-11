@@ -6,7 +6,34 @@ from fastapi.testclient import TestClient
 
 from apps.api.config import Settings
 from apps.api.main import create_app
+from packages.contracts.governance import PolicyDecision, PolicyInput, PolicyObligations
+from packages.governance import InMemoryGovernanceAuditStore
 from packages.registry.database import Database
+
+_GATEWAY_TOKEN = "gateway-contract-token-with-at-least-32-characters"
+
+
+class AllowingPolicyEngine:
+    async def decide(self, policy_input: PolicyInput) -> PolicyDecision:
+        return PolicyDecision(
+            schema_version="agenthub.dev/policy-decision/v1",
+            allow=True,
+            reasons=[f"{policy_input.action.kind}_allowed"],
+            policy_bundle_version="contract.v1",
+            obligations=PolicyObligations(audit=True),
+        )
+
+
+class DenyingPolicyEngine:
+    async def decide(self, policy_input: PolicyInput) -> PolicyDecision:
+        del policy_input
+        return PolicyDecision(
+            schema_version="agenthub.dev/policy-decision/v1",
+            allow=False,
+            reasons=["tool_not_declared"],
+            policy_bundle_version="contract.v1",
+            obligations=PolicyObligations(audit=True),
+        )
 
 
 class UnreadyDatabase(Database):
@@ -22,7 +49,10 @@ class UnreadyDatabase(Database):
 
 @pytest.fixture
 def client() -> TestClient:
-    app = create_app(Settings(environment="test", version="0.1.0-test", _env_file=None))
+    app = create_app(
+        Settings(environment="test", version="0.1.0-test", _env_file=None),
+        governance_audit_store=InMemoryGovernanceAuditStore(),
+    )
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -160,6 +190,166 @@ def test_inventory_invocation_returns_answer_and_evidence(client: TestClient) ->
         "weather.read",
     ]
     assert len(body["citations"]) == 6
+
+
+@pytest.mark.contract
+def test_gateway_requires_an_explicit_caller_identity(client: TestClient) -> None:
+    response = client.post(
+        "/gateway/agents/inventory-agent/invoke",
+        json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+        headers={"X-Correlation-ID": "gateway-no-identity"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.json() == {
+        "error": {
+            "code": "authentication_required",
+            "message": "Gateway authentication required",
+            "correlation_id": "gateway-no-identity",
+            "details": [],
+        }
+    }
+
+
+@pytest.mark.contract
+def test_gateway_invokes_agent_for_explicit_local_identity(client: TestClient) -> None:
+    response = client.post(
+        "/gateway/agents/knowledge-agent/invoke",
+        json={"query": "Can I return an unopened product after 20 days?", "seed": 4},
+        headers={
+            "X-AgentHub-Identity": "local/contract-test",
+            "X-Correlation-ID": "gateway-local",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"].startswith("Unopened products may be returned within 30 days")
+    assert response.json()["retrieval"]["corpus_version"] == "v1"
+
+
+@pytest.mark.contract
+def test_gateway_rejects_unknown_agent_after_authentication(client: TestClient) -> None:
+    response = client.post(
+        "/gateway/agents/unknown-agent/invoke",
+        json={"query": "Do something"},
+        headers={"X-AgentHub-Identity": "local/contract-test"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["message"] == "Agent is not available"
+
+
+@pytest.mark.contract
+def test_runtime_policy_deny_returns_stable_gateway_error() -> None:
+    audit_store = InMemoryGovernanceAuditStore()
+    app = create_app(
+        Settings(environment="test", _env_file=None),
+        policy_engine=DenyingPolicyEngine(),
+        governance_audit_store=audit_store,
+    )
+
+    with TestClient(app, raise_server_exceptions=False) as denied_client:
+        response = denied_client.post(
+            "/gateway/agents/inventory-agent/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+            headers={
+                "X-AgentHub-Identity": "local/contract-test",
+                "X-Correlation-ID": "policy-deny-contract",
+            },
+        )
+        audit = denied_client.get(
+            "/governance/audit",
+            params={"agent_name": "inventory-agent", "outcome": "deny"},
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "error": {
+            "code": "policy_denied",
+            "message": "Action denied by policy",
+            "correlation_id": "policy-deny-contract",
+            "details": [],
+        }
+    }
+    assert audit.status_code == 200
+    assert len(audit.json()) == 1
+    assert audit.json()[0]["identity"] == "local/contract-test"
+    assert audit.json()[0]["correlation_id"] == "policy-deny-contract"
+    assert audit.json()[0]["target"] == "inventory.read"
+    assert "Toronto" not in audit.text
+
+
+@pytest.mark.contract
+def test_governance_policy_and_console_contracts(client: TestClient) -> None:
+    policy = client.get("/governance/policy")
+    page = client.get("/governance")
+
+    assert policy.status_code == 200
+    payload = policy.json()
+    assert payload["environment"] == "test"
+    assert payload["engine"] == "local"
+    assert payload["fail_closed"] is True
+    assert payload["audit_required"] is True
+    assert payload["supported_pii"] == [
+        "email",
+        "phone",
+        "payment_card",
+        "canadian_sin",
+    ]
+    assert {agent["name"] for agent in payload["agents"]} == {
+        "inventory-agent",
+        "knowledge-agent",
+        "shopping-agent",
+    }
+    assert page.status_code == 200
+    assert "Policy command center" in page.text
+    assert 'fetch("/governance/policy")' in page.text
+    assert "governance/audit" in page.text
+
+
+@pytest.mark.contract
+def test_governance_audit_query_is_bounded(client: TestClient) -> None:
+    response = client.get("/governance/audit", params={"limit": 501})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.contract
+def test_production_exposes_only_authenticated_gateway_invocation() -> None:
+    app = create_app(
+        Settings(
+            environment="production",
+            gateway_service_tokens={"service/runtime": _GATEWAY_TOKEN},
+            policy_engine_url="http://127.0.0.1:8181/v1/data/agenthub/authz/decision",
+            _env_file=None,
+        ),
+        policy_engine=AllowingPolicyEngine(),
+        governance_audit_store=InMemoryGovernanceAuditStore(),
+    )
+
+    with TestClient(app, raise_server_exceptions=False) as production_client:
+        direct = production_client.post(
+            "/agents/inventory/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+        )
+        denied = production_client.post(
+            "/gateway/agents/inventory-agent/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+            headers={"X-AgentHub-Identity": "local/contract-test"},
+        )
+        allowed = production_client.post(
+            "/gateway/agents/inventory-agent/invoke",
+            json={"query": "Which Toronto stores may run low on snow shovels this weekend?"},
+            headers={
+                "Authorization": f"Bearer {_GATEWAY_TOKEN}",
+                "X-AgentHub-Identity": "service/runtime",
+            },
+        )
+
+    assert direct.status_code == 404
+    assert denied.status_code == 401
+    assert allowed.status_code == 200
 
 
 @pytest.mark.contract

@@ -6,6 +6,10 @@ runtime:
   retrievalProvider: azure-search
   otelEnabled: true
   otelExporter: azure-monitor
+  policyEngineUrl: http://127.0.0.1:8181/v1/data/agenthub/authz/decision
+
+policy:
+  enabled: true
 
 database:
   authMode: azure-workload-identity
@@ -44,6 +48,8 @@ keyVault:
       objectType: secret
     - objectName: azure-monitor-connection-string # pragma: allowlist secret
       objectType: secret
+    - objectName: gateway-service-tokens # pragma: allowlist secret
+      objectType: secret
   secretObjects:
     - secretName: agenthub-runtime # pragma: allowlist secret
       type: Opaque
@@ -52,3 +58,5 @@ keyVault:
           key: database-url
         - objectName: azure-monitor-connection-string # pragma: allowlist secret
           key: azure-monitor-connection-string # pragma: allowlist secret
+        - objectName: gateway-service-tokens # pragma: allowlist secret
+          key: gateway-service-tokens # pragma: allowlist secret

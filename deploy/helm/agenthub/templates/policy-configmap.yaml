@@ -1,0 +1,14 @@
+{{- if .Values.policy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agenthub.fullname" . }}-policy
+  labels:
+    {{- include "agenthub.labels" . | nindent 4 }}
+    app.kubernetes.io/component: policy
+data:
+  authz.rego: |
+{{ .Files.Get "files/policies/authz.rego" | indent 4 }}
+  data.json: |
+{{ .Files.Get "files/policies/data.json" | indent 4 }}
+{{- end }}

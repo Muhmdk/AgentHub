@@ -1,0 +1,19 @@
+{
+  "agenthub": {
+    "config": {
+      "policy_bundle_version": "phase08.1",
+      "allowed_model_providers": {
+        "local": ["fake"],
+        "test": ["fake"],
+        "staging": ["fake", "azure-openai"],
+        "production": ["azure-openai"]
+      },
+      "runtime_limits": {
+        "max_input_tokens": 16000,
+        "max_output_tokens": 4096,
+        "timeout_ms": 10000,
+        "rate_limit_per_minute": 120
+      }
+    }
+  }
+}

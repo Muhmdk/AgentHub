@@ -7,11 +7,12 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
+from agents.inventory.tools import default_inventory_tools
 from agents.knowledge.agent import KnowledgeAgent
 from agents.shared.providers import create_database, create_provider_bundle
 from agents.shopping.agent import ShoppingAgent
@@ -20,12 +21,23 @@ from apps.api.config import Settings, load_settings
 from apps.api.errors import register_error_handlers
 from apps.api.logging import configure_logging
 from apps.api.middleware import correlation_middleware
-from apps.web import evaluation_page_path, observability_page_path, registry_page_path
+from apps.gateway import GatewayAuthenticator, create_gateway_router
+from apps.web import (
+    evaluation_page_path,
+    governance_page_path,
+    observability_page_path,
+    registry_page_path,
+)
 from packages.contracts.evaluation import (
     EvaluationRunReport,
     EvaluationRunSummary,
     GateDecision,
     RunEvaluationRequest,
+)
+from packages.contracts.governance import (
+    GovernanceAuditEvent,
+    GovernanceAuditOutcome,
+    GovernancePolicyView,
 )
 from packages.contracts.health import HealthResponse, VersionResponse
 from packages.contracts.manifest import AgentManifest
@@ -49,6 +61,20 @@ from packages.contracts.retrieval import GroundedAgentResponse
 from packages.contracts.runtime import AgentRequest, AgentResponse
 from packages.evaluation.repository import EvaluationRepository, EvaluationStore
 from packages.evaluation.service import EvaluationService
+from packages.governance import (
+    AuthorizedChatModel,
+    AuthorizedTool,
+    BudgetLimits,
+    BudgetManager,
+    GovernanceAuditRepository,
+    GovernanceAuditStore,
+    InMemoryGovernanceAuditStore,
+    LocalPolicyEngine,
+    OPAHttpPolicyEngine,
+    PolicyAuthorizer,
+    PolicyEngine,
+    agent_policy_profiles,
+)
 from packages.observability.conventions import Attribute
 from packages.observability.slos import fleet_health
 from packages.observability.telemetry import Telemetry, TelemetryConfig
@@ -70,6 +96,8 @@ def create_app(
     evaluation_store: EvaluationStore | None = None,
     release_store: ReleaseStore | None = None,
     telemetry_instance: Telemetry | None = None,
+    policy_engine: PolicyEngine | None = None,
+    governance_audit_store: GovernanceAuditStore | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
     app_settings = settings or load_settings()
@@ -90,9 +118,90 @@ def create_app(
     )
     providers = create_provider_bundle(app_settings)
     model = providers.model
+    registry_database = database
+    owns_registry_database = False
+    if registry_store is None and registry_database is None:
+        registry_database = create_database(app_settings, providers)
+        owns_registry_database = True
+    if registry_store is None:
+        if registry_database is None:  # pragma: no cover - guarded above
+            raise ValueError("A database is required without a registry store")
+        registry: RegistryStore = RegistryRepository(registry_database)
+    else:
+        registry = registry_store
+    active_audit_store = governance_audit_store
+    if active_audit_store is None:
+        active_audit_store = (
+            GovernanceAuditRepository(registry_database)
+            if registry_database is not None
+            else InMemoryGovernanceAuditStore()
+        )
+    active_policy_engine = policy_engine
+    if active_policy_engine is None:
+        if app_settings.policy_engine_url is not None:
+            active_policy_engine = OPAHttpPolicyEngine(
+                app_settings.policy_engine_url,
+                app_settings.policy_timeout_seconds,
+            )
+        else:
+            active_policy_engine = LocalPolicyEngine()
+    profiles = agent_policy_profiles(model.name)
+    budget_manager = BudgetManager()
+    budget_limits = BudgetLimits(
+        requests_per_minute=app_settings.model_requests_per_minute,
+        tokens_per_minute=app_settings.model_tokens_per_minute,
+        cost_per_hour_usd=app_settings.model_cost_per_hour_usd,
+    )
+    inventory_authorizer = PolicyAuthorizer(
+        active_policy_engine,
+        profiles["inventory-agent"],
+        app_settings.environment,
+        active_audit_store,
+    )
+    knowledge_authorizer = PolicyAuthorizer(
+        active_policy_engine,
+        profiles["knowledge-agent"],
+        app_settings.environment,
+        active_audit_store,
+    )
+    shopping_authorizer = PolicyAuthorizer(
+        active_policy_engine,
+        profiles["shopping-agent"],
+        app_settings.environment,
+        active_audit_store,
+    )
+
+    def governed_model(authorizer: PolicyAuthorizer) -> AuthorizedChatModel:
+        return AuthorizedChatModel(
+            model,
+            authorizer,
+            budget_manager=budget_manager,
+            budget_limits=budget_limits,
+            timeout_seconds=app_settings.model_timeout_seconds,
+            max_attempts=app_settings.model_max_attempts,
+            retry_backoff_seconds=app_settings.model_retry_backoff_seconds,
+            input_cost_per_million=app_settings.azure_openai_input_cost_per_million,
+            output_cost_per_million=app_settings.azure_openai_output_cost_per_million,
+        )
+
+    retail_data = RetailData.load()
+    inventory_tools = default_inventory_tools(retail_data)
     inventory = inventory_agent or InventoryAgent(
-        data=RetailData.load(),
-        model=model,
+        data=retail_data,
+        model=governed_model(inventory_authorizer),
+        tools={
+            name: AuthorizedTool(
+                tool,
+                definition=tool.definition,
+                authorizer=inventory_authorizer,
+                required_scopes=next(
+                    grant.scopes
+                    for grant in profiles["inventory-agent"].tools
+                    if grant.name == name
+                ),
+            )
+            for name, tool in inventory_tools.items()
+        },
         max_steps=app_settings.agent_max_steps,
         tool_timeout_seconds=app_settings.tool_timeout_seconds,
         execution_timeout_seconds=app_settings.agent_timeout_seconds,
@@ -103,27 +212,23 @@ def create_app(
     knowledge = knowledge_agent or KnowledgeAgent(
         retriever=retriever,
         corpus=corpus,
-        model=model,
+        model=governed_model(knowledge_authorizer),
         top_k=app_settings.rag_top_k,
         minimum_score=app_settings.rag_minimum_score,
         timeout_seconds=app_settings.retrieval_timeout_seconds,
         telemetry=telemetry,
     )
     shopping = shopping_agent or ShoppingAgent(
-        product_tool=ProductSearchTool(retriever, corpus),
-        model=model,
+        product_tool=AuthorizedTool(
+            ProductSearchTool(retriever, corpus),
+            definition=ProductSearchTool.definition,
+            authorizer=shopping_authorizer,
+            required_scopes=["catalog:read"],
+        ),
+        model=governed_model(shopping_authorizer),
         timeout_seconds=app_settings.agent_timeout_seconds,
         telemetry=telemetry,
     )
-    registry_database = database
-    owns_registry_database = False
-    if registry_store is None:
-        if registry_database is None:
-            registry_database = create_database(app_settings, providers)
-            owns_registry_database = True
-        registry: RegistryStore = RegistryRepository(registry_database)
-    else:
-        registry = registry_store
     evaluations: EvaluationStore
     if evaluation_store is not None:
         evaluations = evaluation_store
@@ -176,8 +281,27 @@ def create_app(
     app.state.evaluations = evaluations
     app.state.releases = releases
     app.state.database = registry_database
+    app.state.policy_engine = active_policy_engine
+    app.state.governance_audit = active_audit_store
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
+
+    gateway_authenticator = GatewayAuthenticator(
+        environment=app_settings.environment,
+        service_tokens=app_settings.gateway_service_tokens,
+    )
+    app.state.gateway_authenticator = gateway_authenticator
+    app.include_router(
+        create_gateway_router(
+            authenticator=gateway_authenticator,
+            targets={
+                "inventory-agent": inventory,
+                "knowledge-agent": knowledge,
+                "shopping-agent": shopping,
+            },
+            telemetry=telemetry,
+        )
+    )
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     async def liveness() -> HealthResponse:
@@ -202,29 +326,34 @@ def create_app(
             environment=app_settings.environment,
         )
 
-    @app.post(
-        "/agents/inventory/invoke",
-        response_model=AgentResponse,
-        tags=["agents"],
-    )
-    async def invoke_inventory(request: AgentRequest) -> AgentResponse:
-        return await inventory.invoke(request)
+    if app_settings.environment in {"local", "test"}:
 
-    @app.post(
-        "/agents/knowledge/invoke",
-        response_model=GroundedAgentResponse,
-        tags=["agents"],
-    )
-    async def invoke_knowledge(request: AgentRequest) -> GroundedAgentResponse:
-        return await knowledge.invoke(request)
+        @app.post(
+            "/agents/inventory/invoke",
+            response_model=AgentResponse,
+            tags=["agents"],
+            deprecated=True,
+        )
+        async def invoke_inventory(request: AgentRequest) -> AgentResponse:
+            return await inventory.invoke(request)
 
-    @app.post(
-        "/agents/shopping/invoke",
-        response_model=GroundedAgentResponse,
-        tags=["agents"],
-    )
-    async def invoke_shopping(request: AgentRequest) -> GroundedAgentResponse:
-        return await shopping.invoke(request)
+        @app.post(
+            "/agents/knowledge/invoke",
+            response_model=GroundedAgentResponse,
+            tags=["agents"],
+            deprecated=True,
+        )
+        async def invoke_knowledge(request: AgentRequest) -> GroundedAgentResponse:
+            return await knowledge.invoke(request)
+
+        @app.post(
+            "/agents/shopping/invoke",
+            response_model=GroundedAgentResponse,
+            tags=["agents"],
+            deprecated=True,
+        )
+        async def invoke_shopping(request: AgentRequest) -> GroundedAgentResponse:
+            return await shopping.invoke(request)
 
     @app.post(
         "/registry/agents",
@@ -472,6 +601,45 @@ def create_app(
     @app.get("/observability", response_class=FileResponse, include_in_schema=False)
     async def observability_console() -> FileResponse:
         return FileResponse(observability_page_path())
+
+    @app.get(
+        "/governance/policy",
+        response_model=GovernancePolicyView,
+        tags=["governance"],
+    )
+    async def governance_policy() -> GovernancePolicyView:
+        return GovernancePolicyView(
+            environment=app_settings.environment,
+            engine="opa" if app_settings.policy_engine_url is not None else "local",
+            supported_pii=["email", "phone", "payment_card", "canadian_sin"],
+            requests_per_minute=app_settings.model_requests_per_minute,
+            tokens_per_minute=app_settings.model_tokens_per_minute,
+            cost_per_hour_usd=app_settings.model_cost_per_hour_usd,
+            timeout_seconds=app_settings.model_timeout_seconds,
+            max_attempts=app_settings.model_max_attempts,
+            agents=list(profiles.values()),
+        )
+
+    @app.get(
+        "/governance/audit",
+        response_model=list[GovernanceAuditEvent],
+        tags=["governance"],
+    )
+    async def list_governance_audit(
+        agent_name: str | None = None,
+        outcome: GovernanceAuditOutcome | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[GovernanceAuditEvent]:
+        return await asyncio.to_thread(
+            active_audit_store.list_events,
+            agent_name=agent_name,
+            outcome=outcome,
+            limit=limit,
+        )
+
+    @app.get("/governance", response_class=FileResponse, include_in_schema=False)
+    async def governance_console() -> FileResponse:
+        return FileResponse(governance_page_path())
 
     return app
 

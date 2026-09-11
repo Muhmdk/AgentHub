@@ -38,13 +38,13 @@ class FixtureTransport(JsonTransport):
             },
             ("POST", "/registry/agents"): {"created": True},
             ("GET", "/registry/agents/inventory-agent"): {"name": "inventory-agent"},
-            ("POST", "/agents/inventory/invoke"): {
+            ("POST", "/gateway/agents/inventory-agent/invoke"): {
                 "answer": "Queen Street may run low.",
                 "model": self.model,
                 "citations": [{"source_id": "inventory:1", "title": "Inventory"}],
                 "tool_calls": [{"tool_name": "inventory.read"}],
             },
-            ("POST", "/agents/knowledge/invoke"): {
+            ("POST", "/gateway/agents/knowledge-agent/invoke"): {
                 "answer": "Returns are accepted within 30 days.",
                 "model": self.model,
                 "citations": [{"source_id": "returns:0", "title": "Return policy"}],
@@ -79,8 +79,8 @@ def test_smoke_covers_health_registry_agents_and_evaluation() -> None:
         ("GET", "/version"),
         ("POST", "/registry/agents"),
         ("GET", "/registry/agents/inventory-agent"),
-        ("POST", "/agents/inventory/invoke"),
-        ("POST", "/agents/knowledge/invoke"),
+        ("POST", "/gateway/agents/inventory-agent/invoke"),
+        ("POST", "/gateway/agents/knowledge-agent/invoke"),
         ("POST", "/evaluations/runs"),
     ]
 
