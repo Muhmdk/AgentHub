@@ -77,6 +77,15 @@ class FindingKind(StrEnum):
     COUNTER_EVIDENCE = "counter_evidence"
 
 
+class RecommendedIncidentAction(StrEnum):
+    """Advisory outcomes; none are direct actuation commands."""
+
+    MONITOR = "monitor"
+    PAUSE_CANARY = "pause_canary"
+    REQUEST_ROLLBACK = "request_rollback"
+    ESCALATE = "escalate"
+
+
 class IncidentSignal(BaseModel):
     """Sanitized operational measurement evaluated by deterministic rules."""
 
@@ -292,6 +301,69 @@ class DeterministicInvestigation(BaseModel):
     findings: list[InvestigationClaim]
     counter_evidence: list[InvestigationClaim]
     missing_evidence: list[EvidenceKind]
+
+
+class DraftNarrativeClaim(BaseModel):
+    """Structured model output referencing only supplied evidence identifiers."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    statement: str = Field(min_length=3, max_length=500)
+    uncertainty: Literal["low", "medium", "high"]
+    citation_ids: list[UUID] = Field(min_length=1, max_length=20)
+
+
+class InvestigatorDraft(BaseModel):
+    """Bounded generated draft before citation and actuation-path validation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    probable_cause: DraftNarrativeClaim | None = None
+    observations: list[DraftNarrativeClaim] = Field(max_length=20)
+    counter_evidence: list[DraftNarrativeClaim] = Field(max_length=20)
+    blast_radius: DraftNarrativeClaim | None = None
+    recommended_action: RecommendedIncidentAction
+    recommendation_rationale: DraftNarrativeClaim
+
+
+class NarrativeClaim(BaseModel):
+    """Validated generated claim with resolved immutable citations."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    statement: str = Field(min_length=3, max_length=500)
+    uncertainty: Literal["low", "medium", "high"]
+    citations: list[EvidenceCitation] = Field(min_length=1, max_length=20)
+
+
+class InvestigatorRequest(BaseModel):
+    """Read-only evidence packet supplied to an optional investigator model."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    incident_id: UUID
+    deterministic: DeterministicInvestigation
+    timeline: IncidentTimeline
+    instructions: Literal[
+        "Summarize only supplied evidence; cite every claim; state uncertainty; never actuate."
+    ] = "Summarize only supplied evidence; cite every claim; state uncertainty; never actuate."
+
+
+class IncidentInvestigationReport(BaseModel):
+    """Citation-validated optional generated investigation report."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    incident_id: UUID
+    probable_cause: NarrativeClaim | None = None
+    observations: list[NarrativeClaim]
+    counter_evidence: list[NarrativeClaim]
+    blast_radius: NarrativeClaim | None = None
+    recommended_action: RecommendedIncidentAction
+    recommendation_rationale: NarrativeClaim
+    missing_evidence: list[EvidenceKind]
+    generated_by: str = Field(min_length=2, max_length=200)
+    generated_at: datetime
 
 
 class IncidentDetection(BaseModel):

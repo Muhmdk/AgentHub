@@ -12,6 +12,11 @@ from packages.incidents.evidence_repository import (
     IncidentEvidenceRepository,
     IncidentEvidenceStore,
 )
+from packages.incidents.investigator import (
+    IncidentSummaryModel,
+    InvestigatorOutputError,
+    LangGraphIncidentInvestigator,
+)
 from packages.incidents.repository import (
     IncidentConflictError,
     IncidentNotFoundError,
@@ -34,8 +39,11 @@ __all__ = [
     "IncidentService",
     "IncidentSignalFactory",
     "IncidentStore",
+    "IncidentSummaryModel",
     "IncidentTimelineBuilder",
     "IncidentTriggerDetector",
+    "InvestigatorOutputError",
+    "LangGraphIncidentInvestigator",
     "ReleaseEvidenceAdapter",
     "TelemetryEvidenceAdapter",
 ]
