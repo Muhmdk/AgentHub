@@ -421,6 +421,101 @@ class RollbackExecution(BaseModel):
     executed_at: datetime
 
 
+class RollbackMode(StrEnum):
+    AUTOMATIC = "automatic"
+    MANUAL = "manual"
+
+
+class RollbackStatus(StrEnum):
+    REQUESTED = "requested"
+    EXECUTED = "executed"
+    VERIFYING = "verifying"
+    RECOVERED = "recovered"
+    FAILED = "failed"
+    ESCALATED = "escalated"
+
+
+class RollbackPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    min_evidence_items: int = Field(default=3, ge=1, le=1000)
+    cooldown_seconds: int = Field(default=900, ge=0, le=86_400)
+    max_attempts: int = Field(default=3, ge=1, le=10)
+
+
+class RollbackPolicyInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    canary_active: bool
+    guardrail_breached: bool
+    evidence_count: int = Field(ge=0)
+    concurrent_rollout: bool = False
+    ambiguous_cause: bool = False
+    includes_data_migration: bool = False
+    high_risk: bool = False
+    human_approved: bool = False
+    previous_attempts: int = Field(default=0, ge=0)
+    last_attempt_at: datetime | None = None
+    evaluated_at: datetime
+
+
+class RollbackPolicyCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=2, max_length=100)
+    passed: bool
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class RollbackPolicyDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    allowed: bool
+    automatic: bool
+    requires_approval: bool
+    checks: list[RollbackPolicyCheck]
+    reasons: list[str]
+    evaluated_at: datetime
+
+
+class RollbackOperation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    incident_id: UUID
+    route_id: UUID
+    canary_rollout_id: UUID | None = None
+    target_release_id: UUID
+    target_provenance_hash: Sha256
+    command_hash: Sha256
+    mode: RollbackMode
+    status: RollbackStatus
+    attempt_number: int = Field(ge=1)
+    decision: RollbackPolicyDecision
+    idempotency_key: IdempotencyKey
+    actor: str
+    reason: str
+    route_revision_before: int = Field(ge=1)
+    route_revision_after: int | None = Field(default=None, ge=1)
+    created_at: datetime
+    updated_at: datetime
+
+
+class RollbackReservation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    created: bool
+    operation: RollbackOperation
+
+
+class CoordinatedRollbackResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    replayed: bool
+    operation: RollbackOperation
+    execution: RollbackExecution | None = None
+
+
 class IncidentDetection(BaseModel):
     """A non-breach decision or a persisted incident result."""
 

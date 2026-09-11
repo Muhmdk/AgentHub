@@ -1,6 +1,7 @@
 """Deterministic operational incident detection and persistence."""
 
 from packages.incidents.analysis import DeterministicIncidentAnalyzer
+from packages.incidents.coordinator import RollbackCoordinator, RollbackPolicyBlockedError
 from packages.incidents.detection import IncidentTriggerDetector
 from packages.incidents.evidence import (
     ConfigEvidenceAdapter,
@@ -17,6 +18,7 @@ from packages.incidents.investigator import (
     InvestigatorOutputError,
     LangGraphIncidentInvestigator,
 )
+from packages.incidents.policy import RollbackPolicyEvaluator
 from packages.incidents.repository import (
     IncidentConflictError,
     IncidentNotFoundError,
@@ -27,6 +29,10 @@ from packages.incidents.rollback import (
     KnownGoodRollbackExecutor,
     KnownGoodRollbackPlanner,
     RollbackValidationError,
+)
+from packages.incidents.rollback_repository import (
+    RollbackConflictError,
+    RollbackOperationRepository,
 )
 from packages.incidents.service import IncidentService
 from packages.incidents.sources import IncidentSignalFactory
@@ -52,6 +58,11 @@ __all__ = [
     "KnownGoodRollbackPlanner",
     "LangGraphIncidentInvestigator",
     "ReleaseEvidenceAdapter",
+    "RollbackConflictError",
+    "RollbackCoordinator",
+    "RollbackOperationRepository",
+    "RollbackPolicyBlockedError",
+    "RollbackPolicyEvaluator",
     "RollbackValidationError",
     "TelemetryEvidenceAdapter",
 ]

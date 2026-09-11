@@ -51,7 +51,13 @@ def _signal(**updates: object) -> IncidentSignal:
 @pytest.mark.integration
 def test_incident_migration_created_intake_tables(registry_database: Database) -> None:
     tables = set(inspect(registry_database.engine).get_table_names())
-    assert {"incidents", "incident_triggers", "incident_evidence"} <= tables
+    assert {
+        "incidents",
+        "incident_triggers",
+        "incident_evidence",
+        "rollback_operations",
+        "rollback_events",
+    } <= tables
 
 
 @pytest.mark.integration

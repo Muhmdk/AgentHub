@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -141,3 +142,74 @@ class IncidentEvidenceRecord(RegistryBase):
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+
+
+class RollbackOperationRecord(RegistryBase):
+    __tablename__ = "rollback_operations"
+    __table_args__ = (
+        CheckConstraint("mode IN ('automatic', 'manual')", name="ck_rollback_mode"),
+        CheckConstraint(
+            "status IN ('requested', 'executed', 'verifying', 'recovered', 'failed', 'escalated')",
+            name="ck_rollback_status",
+        ),
+        CheckConstraint("attempt_number >= 1", name="ck_rollback_attempt"),
+        CheckConstraint("length(command_hash) = 64", name="ck_rollback_command_hash"),
+        CheckConstraint("length(fingerprint) = 64", name="ck_rollback_fingerprint"),
+        UniqueConstraint("idempotency_key", name="uq_rollback_operation_key"),
+        Index("ix_rollback_incident_created", "incident_id", "created_at"),
+        Index(
+            "uq_rollback_active_incident",
+            "incident_id",
+            unique=True,
+            postgresql_where=text("status IN ('requested', 'executed', 'verifying')"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    incident_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("incidents.id", ondelete="RESTRICT"), nullable=False
+    )
+    route_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("traffic_routes.id", ondelete="RESTRICT"), nullable=False
+    )
+    canary_rollout_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("canary_rollouts.id", ondelete="RESTRICT"), nullable=True
+    )
+    target_release_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("releases.id", ondelete="RESTRICT"), nullable=False
+    )
+    target_provenance_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    command_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    decision: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor: Mapped[str] = mapped_column(String(200), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    route_revision_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    route_revision_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RollbackEventRecord(RegistryBase):
+    __tablename__ = "rollback_events"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('requested', 'executed', 'verifying', 'recovered', 'failed', 'escalated')",
+            name="ck_rollback_event_status",
+        ),
+        Index("ix_rollback_events_operation_time", "operation_id", "occurred_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    operation_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("rollback_operations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
