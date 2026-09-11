@@ -9,6 +9,7 @@ from sqlalchemy import engine_from_config, pool
 from packages.delivery import models as delivery_models
 from packages.evaluation import models as evaluation_models
 from packages.governance import models as governance_models
+from packages.incidents import models as incident_models
 from packages.registry import models as registry_models
 from packages.registry.database import RegistryBase
 from packages.release import models as release_models
@@ -17,6 +18,7 @@ _MAPPED_MODELS = (
     delivery_models,
     evaluation_models,
     governance_models,
+    incident_models,
     registry_models,
     release_models,
 )
