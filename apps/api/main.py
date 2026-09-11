@@ -132,10 +132,21 @@ from packages.observability.slos import fleet_health
 from packages.observability.telemetry import Telemetry, TelemetryConfig
 from packages.registry.database import Database
 from packages.registry.repository import RegistryRepository, RegistryStore
+from packages.registry.schema import EXPECTED_SCHEMA_REVISION
 from packages.release.repository import ReleaseRepository, ReleaseStore
 from packages.release.service import ReleaseService
 
 logger = logging.getLogger("agenthub.api")
+
+
+async def close_bounded(name: str, close: object, timeout_seconds: float) -> None:
+    """Bound shutdown work so one adapter cannot exceed the pod grace period."""
+    if not callable(close):
+        raise TypeError("Shutdown callback must be callable")
+    try:
+        await asyncio.wait_for(asyncio.to_thread(close), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("shutdown_timeout", extra={"dependency": name})
 
 
 def create_app(
@@ -332,10 +343,23 @@ def create_app(
         try:
             yield
         finally:
-            providers.close()
-            telemetry.shutdown()
+            app.state.accepting_requests = False
             if owns_registry_database and registry_database is not None:
-                registry_database.dispose()
+                await close_bounded(
+                    "database",
+                    registry_database.dispose,
+                    app_settings.shutdown_timeout_seconds,
+                )
+            await close_bounded(
+                "telemetry",
+                telemetry.shutdown,
+                app_settings.shutdown_timeout_seconds,
+            )
+            await close_bounded(
+                "providers",
+                providers.close,
+                app_settings.shutdown_timeout_seconds,
+            )
             logger.info("service_stopped")
 
     app = FastAPI(
@@ -356,6 +380,7 @@ def create_app(
     app.state.database = registry_database
     app.state.policy_engine = active_policy_engine
     app.state.governance_audit = active_audit_store
+    app.state.accepting_requests = True
     app.state.incidents = incidents
     app.state.incident_evidence = evidence
     app.middleware("http")(correlation_middleware)
@@ -385,12 +410,18 @@ def create_app(
 
     @app.get("/health/ready", response_model=HealthResponse, tags=["health"])
     async def readiness() -> HealthResponse:
+        if not app.state.accepting_requests:
+            raise HTTPException(status_code=503, detail="Service is draining")
         if registry_database is not None:
             try:
-                ready = await asyncio.to_thread(registry_database.ping)
+                ready, revision = await asyncio.gather(
+                    asyncio.to_thread(registry_database.ping),
+                    asyncio.to_thread(registry_database.schema_revision),
+                )
             except Exception:
                 ready = False
-            if not ready:
+                revision = None
+            if not ready or revision != EXPECTED_SCHEMA_REVISION:
                 raise HTTPException(status_code=503, detail="Database is not ready")
         return HealthResponse(status="ready", service=app_settings.service_name)
 

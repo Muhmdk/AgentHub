@@ -47,6 +47,14 @@ class UnreadyDatabase(Database):
         pass
 
 
+class StaleSchemaDatabase(UnreadyDatabase):
+    def ping(self) -> bool:
+        return True
+
+    def schema_revision(self) -> str:
+        return "0009_rollback_operations"
+
+
 @pytest.fixture
 def client() -> TestClient:
     app = create_app(
@@ -96,6 +104,17 @@ def test_readiness_reports_unavailable_database_without_internal_details() -> No
             "details": [],
         }
     }
+
+
+@pytest.mark.contract
+def test_readiness_rejects_a_reachable_but_stale_database_schema() -> None:
+    app = create_app(Settings(environment="test", _env_file=None), database=StaleSchemaDatabase())
+
+    with TestClient(app, raise_server_exceptions=False) as local_client:
+        response = local_client.get("/health/ready", headers={"X-Correlation-ID": "schema-stale"})
+
+    assert response.status_code == 503
+    assert response.json()["error"]["message"] == "Database is not ready"
 
 
 @pytest.mark.contract

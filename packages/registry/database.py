@@ -27,10 +27,20 @@ class Database:
         *,
         token_provider: AccessTokenSource | None = None,
         token_scope: str = "https://ossrdbms-aad.database.windows.net/.default",
+        pool_size: int = 5,
+        max_overflow: int = 10,
+        pool_timeout_seconds: float = 5,
     ) -> None:
         self._token_provider = token_provider
         self._token_scope = token_scope
-        self.engine: Engine = create_engine(url, pool_pre_ping=True)
+        engine_options: dict[str, object] = {"pool_pre_ping": True}
+        if not url.startswith("sqlite"):
+            engine_options.update(
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_timeout=pool_timeout_seconds,
+            )
+        self.engine: Engine = create_engine(url, **engine_options)
         if token_provider is not None:
             event.listen(self.engine, "do_connect", self._inject_access_token)
         self._sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
@@ -58,6 +68,13 @@ class Database:
     def ping(self) -> bool:
         with self.engine.connect() as connection:
             return bool(connection.execute(text("SELECT 1")).scalar_one() == 1)
+
+    def schema_revision(self) -> str | None:
+        """Return the applied Alembic revision without mutating schema state."""
+        with self.engine.connect() as connection:
+            return connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one_or_none()
 
     def dispose(self) -> None:
         self.engine.dispose()

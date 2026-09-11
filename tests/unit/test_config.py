@@ -27,6 +27,10 @@ def test_settings_have_safe_local_defaults(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.rag_minimum_score == 0.15
     assert settings.retrieval_timeout_seconds == 5.0
     assert settings.database_auth_mode == "password"
+    assert settings.database_pool_size == 5
+    assert settings.database_max_overflow == 10
+    assert settings.database_pool_timeout_seconds == 5
+    assert settings.shutdown_timeout_seconds == 10
     assert settings.database_url.endswith("@127.0.0.1:5433/agenthub")
 
 

@@ -10,6 +10,7 @@ data:
   AGENTHUB_API_HOST: "0.0.0.0"
   AGENTHUB_API_PORT: {{ .Values.service.targetPort | quote }}
   AGENTHUB_POLICY_TIMEOUT_SECONDS: {{ .Values.runtime.policyTimeoutSeconds | quote }}
+  AGENTHUB_SHUTDOWN_TIMEOUT_SECONDS: {{ .Values.runtime.shutdownTimeoutSeconds | quote }}
   {{- with .Values.runtime.policyEngineUrl }}
   AGENTHUB_POLICY_ENGINE_URL: {{ . | quote }}
   {{- end }}
@@ -29,6 +30,9 @@ data:
   AGENTHUB_RETRIEVAL_TIMEOUT_SECONDS: {{ .Values.runtime.retrievalTimeoutSeconds | quote }}
   AGENTHUB_AZURE_REQUEST_TIMEOUT_SECONDS: {{ .Values.runtime.azureRequestTimeoutSeconds | quote }}
   AGENTHUB_DATABASE_AUTH_MODE: {{ .Values.database.authMode | quote }}
+  AGENTHUB_DATABASE_POOL_SIZE: {{ .Values.database.poolSize | quote }}
+  AGENTHUB_DATABASE_MAX_OVERFLOW: {{ .Values.database.maxOverflow | quote }}
+  AGENTHUB_DATABASE_POOL_TIMEOUT_SECONDS: {{ .Values.database.poolTimeoutSeconds | quote }}
   AGENTHUB_AZURE_POSTGRES_TOKEN_SCOPE: {{ .Values.database.azureTokenScope | quote }}
   AGENTHUB_OTEL_ENABLED: {{ .Values.runtime.otelEnabled | quote }}
   AGENTHUB_OTEL_EXPORTER: {{ .Values.runtime.otelExporter | quote }}

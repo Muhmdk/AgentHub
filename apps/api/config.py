@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     azure_search_token_scope: str = Field(default=AZURE_SEARCH_SCOPE, min_length=1)
     azure_request_timeout_seconds: float = Field(default=10.0, gt=0.0, le=120.0)
     database_auth_mode: Literal["password", "azure-workload-identity"] = "password"
+    database_pool_size: int = Field(default=5, ge=1, le=50)
+    database_max_overflow: int = Field(default=10, ge=0, le=100)
+    database_pool_timeout_seconds: float = Field(default=5, gt=0, le=30)
     azure_postgres_token_scope: str = Field(
         default="https://ossrdbms-aad.database.windows.net/.default",
         min_length=1,
@@ -89,6 +92,7 @@ class Settings(BaseSettings):
         min_length=1,
     )
     version: str = Field(default_factory=installed_version, min_length=1, max_length=64)
+    shutdown_timeout_seconds: float = Field(default=10, gt=0, le=60)
 
     @model_validator(mode="after")
     def validate_selected_providers(self) -> Self:

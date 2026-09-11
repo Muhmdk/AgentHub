@@ -121,7 +121,8 @@
         "azureMonitorConnectionStringSecretKey",
         "gatewayServiceTokensSecretKey",
         "policyEngineUrl",
-        "policyTimeoutSeconds"
+        "policyTimeoutSeconds",
+        "shutdownTimeoutSeconds"
       ],
       "properties": {
         "environment": { "enum": ["local", "test", "staging", "production"] },
@@ -155,7 +156,8 @@
         "azureMonitorConnectionStringSecretKey": { "type": "string", "minLength": 1 },
         "gatewayServiceTokensSecretKey": { "type": "string", "minLength": 1 },
         "policyEngineUrl": { "type": "string", "pattern": "^$|^https?://" },
-        "policyTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 }
+        "policyTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
+        "shutdownTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 60 }
       }
     },
     "policy": {
@@ -181,10 +183,13 @@
     "database": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["authMode", "azureTokenScope", "createSecret", "url", "existingSecret", "secretKey"],
+      "required": ["authMode", "azureTokenScope", "poolSize", "maxOverflow", "poolTimeoutSeconds", "createSecret", "url", "existingSecret", "secretKey"],
       "properties": {
         "authMode": { "enum": ["password", "azure-workload-identity"] },
         "azureTokenScope": { "type": "string", "minLength": 1 },
+        "poolSize": { "type": "integer", "minimum": 1, "maximum": 50 },
+        "maxOverflow": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "poolTimeoutSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
         "createSecret": { "type": "boolean" },
         "url": { "type": "string" },
         "existingSecret": { "type": "string" },

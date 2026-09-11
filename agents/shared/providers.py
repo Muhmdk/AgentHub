@@ -37,6 +37,9 @@ class ProviderSettings(Protocol):
     azure_request_timeout_seconds: float
     azure_postgres_token_scope: str
     database_url: str
+    database_pool_size: int
+    database_max_overflow: int
+    database_pool_timeout_seconds: float
 
 
 @dataclass(frozen=True)
@@ -129,11 +132,19 @@ def create_provider_bundle(settings: ProviderSettings) -> ProviderBundle:
 def create_database(settings: ProviderSettings, bundle: ProviderBundle) -> Database:
     """Compose PostgreSQL with a fresh Entra token for every pooled connection."""
     if settings.database_auth_mode == "password":
-        return Database(settings.database_url)
+        return Database(
+            settings.database_url,
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_timeout_seconds=settings.database_pool_timeout_seconds,
+        )
     if bundle.token_provider is None:
         raise ValueError("Azure PostgreSQL authentication requires an Azure token provider")
     return Database(
         settings.database_url,
         token_provider=bundle.token_provider,
         token_scope=settings.azure_postgres_token_scope,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout_seconds=settings.database_pool_timeout_seconds,
     )
