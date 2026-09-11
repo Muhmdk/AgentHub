@@ -37,6 +37,29 @@ class ShadowStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class CanaryState(StrEnum):
+    """Ordered progressive-delivery stages and terminal outcomes."""
+
+    PENDING = "pending"
+    FIVE_PERCENT = "5_percent"
+    TWENTY_FIVE_PERCENT = "25_percent"
+    FIFTY_PERCENT = "50_percent"
+    ONE_HUNDRED_PERCENT = "100_percent"
+    PAUSED = "paused"
+    ROLLED_BACK = "rolled_back"
+    COMPLETED = "completed"
+
+
+class CanaryAction(StrEnum):
+    """Explicit operator or automation action applied to a canary."""
+
+    START = "start"
+    PROMOTE = "promote"
+    PAUSE = "pause"
+    RESUME = "resume"
+    ABORT = "abort"
+
+
 class RouteTarget(BaseModel):
     """Immutable release identity selected by a route."""
 
@@ -242,3 +265,27 @@ class ShadowComparison(BaseModel):
     latency: MetricDelta
     error_rate: MetricDelta
     cost: MetricDelta
+
+
+class CanaryProgress(BaseModel):
+    """Current canary state with enough evidence to resume a paused rollout."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    state: CanaryState = CanaryState.PENDING
+    resume_state: CanaryState | None = None
+
+    @model_validator(mode="after")
+    def validate_resume_state(self) -> CanaryProgress:
+        resumable = {
+            CanaryState.PENDING,
+            CanaryState.FIVE_PERCENT,
+            CanaryState.TWENTY_FIVE_PERCENT,
+            CanaryState.FIFTY_PERCENT,
+            CanaryState.ONE_HUNDRED_PERCENT,
+        }
+        if self.state is CanaryState.PAUSED and self.resume_state not in resumable:
+            raise ValueError("Paused canaries require their last active state")
+        if self.state is not CanaryState.PAUSED and self.resume_state is not None:
+            raise ValueError("Only paused canaries may contain a resume state")
+        return self
