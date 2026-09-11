@@ -190,6 +190,10 @@ class RollbackOperationRecord(RegistryBase):
     reason: Mapped[str] = mapped_column(String(500), nullable=False)
     route_revision_before: Mapped[int] = mapped_column(Integer, nullable=False)
     route_revision_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    verification_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    recovery_decision: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

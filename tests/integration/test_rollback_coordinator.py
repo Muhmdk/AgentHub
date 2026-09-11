@@ -1,6 +1,6 @@
 """PostgreSQL coverage for policy-constrained durable rollback execution."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -12,12 +12,16 @@ from packages.contracts.incident import (
     IncidentTriggerType,
     ObserveIncidentSignalRequest,
     PrepareRollbackRequest,
+    RecoveryObservation,
+    RecoveryOutcome,
+    RecoveryPolicy,
     RollbackPolicyInput,
     RollbackStatus,
 )
 from packages.delivery.canary_repository import CanaryRepository
 from packages.delivery.repository import DeliveryRepository
 from packages.incidents.coordinator import RollbackCoordinator
+from packages.incidents.recovery import RollbackRecoveryVerifier
 from packages.incidents.repository import IncidentRepository
 from packages.incidents.rollback import KnownGoodRollbackExecutor, KnownGoodRollbackPlanner
 from packages.incidents.rollback_repository import RollbackOperationRepository
@@ -128,12 +132,34 @@ def test_automatic_canary_rollback_is_durable_audited_and_idempotent(
     assert first.execution.canary.progress.state.value == "rolled_back"
     assert replay.replayed is True
     assert replay.operation == first.operation
+    recovery_policy = RecoveryPolicy()
+    verifier = RollbackRecoveryVerifier(operations)
+    verifying = verifier.begin(first.operation, recovery_policy, started_at=NOW)
+    decision, recovered = verifier.verify(
+        verifying,
+        RecoveryObservation(
+            window_start=NOW,
+            window_end=NOW + timedelta(minutes=5),
+            observation_count=10,
+            availability=0.999,
+            error_rate=0.001,
+            p95_latency_ms=250,
+            guardrail_healthy=True,
+            telemetry_complete=True,
+            source_refs=["telemetry://knowledge-agent/recovery"],
+        ),
+        recovery_policy,
+        evaluated_at=NOW + timedelta(minutes=5),
+    )
+    assert decision.outcome is RecoveryOutcome.RECOVERED
+    assert recovered.status is RollbackStatus.RECOVERED
+    assert IncidentRepository(registry_database).get(incident.id).status.value == "resolved"
     with registry_database.transaction() as session:
         event_count = session.execute(
             text("SELECT count(*) FROM rollback_events WHERE operation_id = :id"),
             {"id": first.operation.id},
         ).scalar_one()
-    assert event_count == 2
+    assert event_count == 4
     with (
         pytest.raises(DBAPIError, match="rollback events are append-only"),
         registry_database.transaction() as session,

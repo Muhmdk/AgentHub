@@ -435,6 +435,73 @@ class RollbackStatus(StrEnum):
     ESCALATED = "escalated"
 
 
+class RecoveryOutcome(StrEnum):
+    """Bounded result of post-rollback recovery verification."""
+
+    PENDING = "pending"
+    RECOVERED = "recovered"
+    ESCALATED = "escalated"
+
+
+class RecoveryPolicy(BaseModel):
+    """Fixed-window health requirements evaluated after rollback execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    observation_window_seconds: int = Field(default=300, ge=60, le=3600)
+    min_observations: int = Field(default=5, ge=1, le=10_000)
+    min_availability: float = Field(default=0.99, ge=0, le=1)
+    max_error_rate: float = Field(default=0.01, ge=0, le=1)
+    max_p95_latency_ms: float = Field(default=1000, gt=0, allow_inf_nan=False)
+
+
+class RecoveryObservation(BaseModel):
+    """Sanitized aggregate telemetry spanning a post-rollback window."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    window_start: datetime
+    window_end: datetime
+    observation_count: int = Field(ge=0)
+    availability: float = Field(ge=0, le=1, allow_inf_nan=False)
+    error_rate: float = Field(ge=0, le=1, allow_inf_nan=False)
+    p95_latency_ms: float = Field(ge=0, allow_inf_nan=False)
+    guardrail_healthy: bool
+    telemetry_complete: bool
+    source_refs: list[str] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_observation_window(self) -> RecoveryObservation:
+        if any(
+            value.tzinfo is None or value.utcoffset() is None
+            for value in (self.window_start, self.window_end)
+        ):
+            raise ValueError("Recovery observation timestamps must be timezone-aware")
+        if self.window_end <= self.window_start:
+            raise ValueError("Recovery observation window must end after it starts")
+        return self
+
+
+class RecoveryCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=2, max_length=100)
+    passed: bool
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class RecoveryDecision(BaseModel):
+    """Explainable recovery result persisted with the rollback operation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    outcome: RecoveryOutcome
+    checks: list[RecoveryCheck]
+    reasons: list[str]
+    source_refs: list[str]
+    evaluated_at: datetime
+
+
 class RollbackPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -497,6 +564,8 @@ class RollbackOperation(BaseModel):
     reason: str
     route_revision_before: int = Field(ge=1)
     route_revision_after: int | None = Field(default=None, ge=1)
+    verification_deadline: datetime | None = None
+    recovery_decision: RecoveryDecision | None = None
     created_at: datetime
     updated_at: datetime
 
