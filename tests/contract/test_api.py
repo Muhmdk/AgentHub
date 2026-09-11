@@ -281,6 +281,41 @@ def test_runtime_policy_deny_returns_stable_gateway_error() -> None:
 
 
 @pytest.mark.contract
+def test_governance_policy_and_console_contracts(client: TestClient) -> None:
+    policy = client.get("/governance/policy")
+    page = client.get("/governance")
+
+    assert policy.status_code == 200
+    payload = policy.json()
+    assert payload["environment"] == "test"
+    assert payload["engine"] == "local"
+    assert payload["fail_closed"] is True
+    assert payload["audit_required"] is True
+    assert payload["supported_pii"] == [
+        "email",
+        "phone",
+        "payment_card",
+        "canadian_sin",
+    ]
+    assert {agent["name"] for agent in payload["agents"]} == {
+        "inventory-agent",
+        "knowledge-agent",
+        "shopping-agent",
+    }
+    assert page.status_code == 200
+    assert "Policy command center" in page.text
+    assert 'fetch("/governance/policy")' in page.text
+    assert "governance/audit" in page.text
+
+
+@pytest.mark.contract
+def test_governance_audit_query_is_bounded(client: TestClient) -> None:
+    response = client.get("/governance/audit", params={"limit": 501})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.contract
 def test_production_exposes_only_authenticated_gateway_invocation() -> None:
     app = create_app(
         Settings(

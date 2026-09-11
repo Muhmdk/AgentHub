@@ -22,14 +22,23 @@ from apps.api.errors import register_error_handlers
 from apps.api.logging import configure_logging
 from apps.api.middleware import correlation_middleware
 from apps.gateway import GatewayAuthenticator, create_gateway_router
-from apps.web import evaluation_page_path, observability_page_path, registry_page_path
+from apps.web import (
+    evaluation_page_path,
+    governance_page_path,
+    observability_page_path,
+    registry_page_path,
+)
 from packages.contracts.evaluation import (
     EvaluationRunReport,
     EvaluationRunSummary,
     GateDecision,
     RunEvaluationRequest,
 )
-from packages.contracts.governance import GovernanceAuditEvent, GovernanceAuditOutcome
+from packages.contracts.governance import (
+    GovernanceAuditEvent,
+    GovernanceAuditOutcome,
+    GovernancePolicyView,
+)
 from packages.contracts.health import HealthResponse, VersionResponse
 from packages.contracts.manifest import AgentManifest
 from packages.contracts.observability import AgentHealth, FleetHealth
@@ -594,6 +603,24 @@ def create_app(
         return FileResponse(observability_page_path())
 
     @app.get(
+        "/governance/policy",
+        response_model=GovernancePolicyView,
+        tags=["governance"],
+    )
+    async def governance_policy() -> GovernancePolicyView:
+        return GovernancePolicyView(
+            environment=app_settings.environment,
+            engine="opa" if app_settings.policy_engine_url is not None else "local",
+            supported_pii=["email", "phone", "payment_card", "canadian_sin"],
+            requests_per_minute=app_settings.model_requests_per_minute,
+            tokens_per_minute=app_settings.model_tokens_per_minute,
+            cost_per_hour_usd=app_settings.model_cost_per_hour_usd,
+            timeout_seconds=app_settings.model_timeout_seconds,
+            max_attempts=app_settings.model_max_attempts,
+            agents=list(profiles.values()),
+        )
+
+    @app.get(
         "/governance/audit",
         response_model=list[GovernanceAuditEvent],
         tags=["governance"],
@@ -609,6 +636,10 @@ def create_app(
             outcome=outcome,
             limit=limit,
         )
+
+    @app.get("/governance", response_class=FileResponse, include_in_schema=False)
+    async def governance_console() -> FileResponse:
+        return FileResponse(governance_page_path())
 
     return app
 

@@ -292,3 +292,21 @@ class GovernanceAuditEvent(BaseModel):
     correlation_id: Identity
     release_id: Identity | None = None
     sanitized_input: PolicyInput
+
+
+class GovernancePolicyView(BaseModel):
+    """Safe operator summary of the active governance boundary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    environment: DeploymentEnvironment
+    engine: Literal["local", "opa"]
+    fail_closed: Literal[True] = True
+    audit_required: Literal[True] = True
+    supported_pii: list[Literal["email", "phone", "payment_card", "canadian_sin"]]
+    requests_per_minute: int = Field(ge=1)
+    tokens_per_minute: int = Field(ge=1)
+    cost_per_hour_usd: float = Field(ge=0)
+    timeout_seconds: float = Field(gt=0)
+    max_attempts: int = Field(ge=1, le=3)
+    agents: list[PolicyAgent]
