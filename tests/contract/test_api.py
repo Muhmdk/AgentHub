@@ -387,7 +387,8 @@ def test_production_exposes_only_authenticated_gateway_invocation() -> None:
             },
         )
 
-    assert direct.status_code == 404
+    assert direct.status_code == 401
+    assert direct.json()["error"]["code"] == "authentication_required"
     assert denied.status_code == 401
     assert allowed.status_code == 200
 

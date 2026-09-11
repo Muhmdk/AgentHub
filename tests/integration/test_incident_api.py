@@ -215,12 +215,34 @@ def test_incident_rollback_api_derives_policy_facts_server_side(
         f"/incidents/{incident['id']}/rollback",
         json={**intent, "evidence_count": 999, "guardrail_breached": True},
     )
-    rollback = incident_client.post(
-        f"/incidents/{incident['id']}/rollback",
-        json=intent,
+    service_token = "incident-control-token-with-at-least-32-characters"
+    production_app = create_app(
+        Settings(
+            environment="production",
+            gateway_service_tokens={"service/incident": service_token},
+            policy_engine_url="http://127.0.0.1:8181/v1/data/agenthub/authz/decision",
+            _env_file=None,
+        ),
+        database=registry_database,
     )
+    headers = {
+        "Authorization": f"Bearer {service_token}",
+        "X-AgentHub-Identity": "service/incident",
+    }
+    with TestClient(production_app, raise_server_exceptions=False) as production_client:
+        spoofed_actor = production_client.post(
+            f"/incidents/{incident['id']}/rollback",
+            json=intent,
+            headers=headers,
+        )
+        rollback = production_client.post(
+            f"/incidents/{incident['id']}/rollback",
+            json={**intent, "actor": "service/incident"},
+            headers=headers,
+        )
 
     assert injected_fact.status_code == 422
+    assert spoofed_actor.status_code == 403
     assert rollback.status_code == 200
     assert rollback.json()["operation"]["mode"] == "automatic"
     assert rollback.json()["operation"]["status"] == "executed"

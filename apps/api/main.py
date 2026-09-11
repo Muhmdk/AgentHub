@@ -22,7 +22,7 @@ from apps.api.config import Settings, load_settings
 from apps.api.errors import register_error_handlers
 from apps.api.logging import configure_logging
 from apps.api.middleware import correlation_middleware
-from apps.gateway import GatewayAuthenticator, create_gateway_router
+from apps.gateway import CallerIdentity, GatewayAuthenticator, create_gateway_router
 from apps.web import (
     delivery_page_path,
     evaluation_page_path,
@@ -366,6 +366,7 @@ def create_app(
         service_tokens=app_settings.gateway_service_tokens,
     )
     app.state.gateway_authenticator = gateway_authenticator
+    app.state.control_plane_authenticator = gateway_authenticator
     app.include_router(
         create_gateway_router(
             authenticator=gateway_authenticator,
@@ -922,7 +923,14 @@ def create_app(
     async def execute_incident_rollback(
         incident_id: UUID,
         intent: ExecuteIncidentRollbackRequest,
+        request: Request,
     ) -> CoordinatedRollbackResult:
+        caller: CallerIdentity | None = getattr(request.state, "caller_identity", None)
+        if caller is not None and caller.subject != intent.actor:
+            raise HTTPException(
+                status_code=403,
+                detail="Rollback actor must match the authenticated identity",
+            )
         if rollbacks is None:
             raise HTTPException(status_code=503, detail="Rollback store is unavailable")
         route_store = require_routes()
