@@ -1,11 +1,14 @@
 """PostgreSQL coverage for durable canary orchestration."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from threading import Barrier
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import DBAPIError
 
 from apps.api.config import Settings
 from apps.api.main import create_app
@@ -19,7 +22,7 @@ from packages.contracts.delivery import (
     ShadowComparison,
 )
 from packages.delivery.canary_repository import CanaryRepository
-from packages.delivery.repository import DeliveryRepository
+from packages.delivery.repository import DeliveryConflictError, DeliveryRepository
 from packages.registry.database import Database
 from tests.integration.test_delivery_repository import _create_request, _eligible_releases
 
@@ -126,6 +129,154 @@ def test_canary_create_and_start_are_idempotent_atomic_and_audited(
         "canary_action",
     ]
     assert routes.get_for_agent("knowledge-agent", DeliveryEnvironment.PRODUCTION) == updated_route
+
+
+@pytest.mark.integration
+def test_concurrent_canary_retries_advance_route_and_rollout_once(
+    registry_database: Database,
+) -> None:
+    stable_id, candidate_id = _eligible_releases(registry_database)
+    routes = DeliveryRepository(registry_database)
+    route = routes.create(_create_request(stable_id, candidate_id)).route
+    canaries = CanaryRepository(registry_database)
+    rollout = canaries.create(
+        CreateCanaryRequest(
+            idempotency_key="concurrent-canary-create",
+            route_id=route.id,
+            expected_route_revision=route.revision,
+            actor="delivery-operator",
+            reason="Create a concurrency-tested rollout",
+        )
+    ).rollout
+    action = CanaryActionRequest(
+        idempotency_key="concurrent-canary-start",
+        action=CanaryAction.START,
+        expected_revision=rollout.revision,
+        expected_route_revision=route.revision,
+        actor="delivery-operator",
+        reason="Start one canary despite concurrent retries",
+        comparison=healthy_comparison(
+            route_id=route.id,
+            route_revision=route.revision,
+            stable_id=stable_id,
+            candidate_id=candidate_id,
+        ),
+        telemetry_healthy=True,
+    )
+    barrier = Barrier(2)
+
+    def start() -> tuple[int, int]:
+        barrier.wait()
+        result = canaries.transition(rollout.id, action)
+        return result.revision, result.route_revision
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        revisions = list(executor.map(lambda _: start(), range(2)))
+
+    assert revisions == [(2, 2), (2, 2)]
+    assert canaries.get(rollout.id).progress.state is CanaryState.FIVE_PERCENT
+    assert routes.get(route.id).allocation.candidate_weight_basis_points == 500
+    assert len(canaries.events(rollout.id)) == 2
+    assert len(routes.events(route.id)) == 2
+
+
+@pytest.mark.integration
+def test_concurrent_distinct_canary_actions_have_one_revision_winner(
+    registry_database: Database,
+) -> None:
+    stable_id, candidate_id = _eligible_releases(registry_database)
+    routes = DeliveryRepository(registry_database)
+    route = routes.create(_create_request(stable_id, candidate_id)).route
+    canaries = CanaryRepository(registry_database)
+    rollout = canaries.create(
+        CreateCanaryRequest(
+            idempotency_key="competing-canary-create",
+            route_id=route.id,
+            expected_route_revision=route.revision,
+            actor="delivery-operator",
+            reason="Create a rollout with competing starts",
+        )
+    ).rollout
+    comparison = healthy_comparison(
+        route_id=route.id,
+        route_revision=route.revision,
+        stable_id=stable_id,
+        candidate_id=candidate_id,
+    )
+    barrier = Barrier(2)
+
+    def start(suffix: str) -> CanaryState | DeliveryConflictError:
+        barrier.wait()
+        try:
+            return canaries.transition(
+                rollout.id,
+                CanaryActionRequest(
+                    idempotency_key=f"competing-canary-start-{suffix}",
+                    action=CanaryAction.START,
+                    expected_revision=rollout.revision,
+                    expected_route_revision=route.revision,
+                    actor="delivery-operator",
+                    reason=f"Competing start action {suffix}",
+                    comparison=comparison,
+                    telemetry_healthy=True,
+                ),
+            ).progress.state
+        except DeliveryConflictError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(start, ("a", "b")))
+
+    assert outcomes.count(CanaryState.FIVE_PERCENT) == 1
+    conflicts = [outcome for outcome in outcomes if isinstance(outcome, DeliveryConflictError)]
+    assert len(conflicts) == 1
+    assert "revision conflict" in str(conflicts[0])
+    assert canaries.get(rollout.id).revision == 2
+    assert routes.get(route.id).revision == 2
+
+
+@pytest.mark.integration
+def test_database_protects_canary_identity_and_append_only_events(
+    registry_database: Database,
+) -> None:
+    stable_id, candidate_id = _eligible_releases(registry_database)
+    route = (
+        DeliveryRepository(registry_database).create(_create_request(stable_id, candidate_id)).route
+    )
+    rollout = (
+        CanaryRepository(registry_database)
+        .create(
+            CreateCanaryRequest(
+                idempotency_key="immutable-canary-create",
+                route_id=route.id,
+                expected_route_revision=route.revision,
+                actor="delivery-operator",
+                reason="Verify immutable canary evidence",
+            )
+        )
+        .rollout
+    )
+
+    with (
+        pytest.raises(DBAPIError, match="canary rollout identity is immutable"),
+        registry_database.transaction() as session,
+    ):
+        session.execute(
+            text("UPDATE canary_rollouts SET candidate_release_id = :stable WHERE id = :id"),
+            {"stable": stable_id, "id": rollout.id},
+        )
+    with (
+        pytest.raises(DBAPIError, match="canary rollouts cannot be deleted"),
+        registry_database.transaction() as session,
+    ):
+        session.execute(text("DELETE FROM canary_rollouts WHERE id = :id"), {"id": rollout.id})
+    with (
+        pytest.raises(DBAPIError, match="canary events are append-only"),
+        registry_database.transaction() as session,
+    ):
+        session.execute(
+            text("DELETE FROM canary_events WHERE rollout_id = :id"), {"id": rollout.id}
+        )
 
 
 @pytest.mark.contract

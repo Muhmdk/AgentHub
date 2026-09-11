@@ -1,7 +1,9 @@
 """PostgreSQL coverage for atomic, idempotent traffic routes."""
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from uuid import UUID, uuid4
 
 import pytest
@@ -216,6 +218,73 @@ def test_atomic_replace_is_revision_guarded_idempotent_and_audited(
                 }
             ),
         )
+
+
+@pytest.mark.integration
+def test_concurrent_route_retries_commit_once_and_return_the_same_revision(
+    registry_database: Database,
+) -> None:
+    stable_id, candidate_id = _eligible_releases(registry_database)
+    repository = DeliveryRepository(registry_database)
+    route = repository.create(_create_request(stable_id, candidate_id)).route
+    change = ReplaceTrafficRouteRequest(
+        idempotency_key="concurrent-route-retry",
+        expected_revision=route.revision,
+        stable_release_id=stable_id,
+        candidate_release_id=candidate_id,
+        candidate_weight_basis_points=500,
+        actor="delivery-operator",
+        reason="Apply one concurrent route mutation",
+    )
+    barrier = Barrier(2)
+
+    def replace() -> int:
+        barrier.wait()
+        return repository.replace(route.id, change).revision
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        revisions = list(executor.map(lambda _: replace(), range(2)))
+
+    assert revisions == [2, 2]
+    assert repository.get(route.id).allocation.candidate_weight_basis_points == 500
+    assert [event.new_revision for event in repository.events(route.id)] == [1, 2]
+
+
+@pytest.mark.integration
+def test_concurrent_route_changes_allow_exactly_one_revision_winner(
+    registry_database: Database,
+) -> None:
+    stable_id, candidate_id = _eligible_releases(registry_database)
+    repository = DeliveryRepository(registry_database)
+    route = repository.create(_create_request(stable_id, candidate_id)).route
+    barrier = Barrier(2)
+
+    def replace(weight: int) -> int | DeliveryConflictError:
+        request = ReplaceTrafficRouteRequest(
+            idempotency_key=f"concurrent-route-{weight}",
+            expected_revision=route.revision,
+            stable_release_id=stable_id,
+            candidate_release_id=candidate_id,
+            candidate_weight_basis_points=weight,
+            actor="delivery-operator",
+            reason=f"Compete to set candidate weight to {weight}",
+        )
+        barrier.wait()
+        try:
+            return repository.replace(route.id, request).allocation.candidate_weight_basis_points
+        except DeliveryConflictError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(replace, (500, 2_500)))
+
+    winners = [outcome for outcome in outcomes if isinstance(outcome, int)]
+    conflicts = [outcome for outcome in outcomes if isinstance(outcome, DeliveryConflictError)]
+    assert len(winners) == 1
+    assert len(conflicts) == 1
+    assert "revision conflict" in str(conflicts[0])
+    assert repository.get(route.id).allocation.candidate_weight_basis_points == winners[0]
+    assert [event.new_revision for event in repository.events(route.id)] == [1, 2]
 
 
 @pytest.mark.integration

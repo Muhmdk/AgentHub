@@ -192,6 +192,22 @@ class DeliveryRepository:
                 ).scalar_one_or_none()
                 if record is None:
                     raise DeliveryNotFoundError("Traffic route was not found")
+
+                # A concurrent request can commit the same idempotency token while
+                # this transaction waits for the route lock. Under READ COMMITTED,
+                # checking again after the lock observes that completed mutation.
+                replay = session.execute(
+                    select(TrafficRouteEventRecord).where(
+                        TrafficRouteEventRecord.idempotency_key == request.idempotency_key
+                    )
+                ).scalar_one_or_none()
+                if replay is not None:
+                    if replay.route_id != route_id or replay.fingerprint != fingerprint:
+                        raise DeliveryConflictError(
+                            "Route retry token was already used for a different mutation"
+                        )
+                    return self._view(session, record)
+
                 if record.revision != request.expected_revision:
                     raise DeliveryConflictError(
                         f"Route revision conflict: expected {request.expected_revision}, "

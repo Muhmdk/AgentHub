@@ -215,6 +215,22 @@ class CanaryRepository:
                     .where(TrafficRouteRecord.id == rollout.route_id)
                     .with_for_update()
                 ).scalar_one()
+
+                # A matching action can finish while this transaction waits for
+                # the rollout lock. Recheck after both delivery rows are locked so
+                # simultaneous retries return the already committed result.
+                replay = session.execute(
+                    select(CanaryEventRecord).where(
+                        CanaryEventRecord.idempotency_key == request.idempotency_key
+                    )
+                ).scalar_one_or_none()
+                if replay is not None:
+                    if replay.rollout_id != rollout_id or replay.fingerprint != fingerprint:
+                        raise DeliveryConflictError(
+                            "Canary retry token was already used for a different action"
+                        )
+                    return self._view(session, rollout)
+
                 if rollout.revision != request.expected_revision:
                     raise DeliveryConflictError(
                         f"Canary revision conflict: expected {request.expected_revision}, "
