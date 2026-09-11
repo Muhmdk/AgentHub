@@ -585,6 +585,18 @@ class CoordinatedRollbackResult(BaseModel):
     execution: RollbackExecution | None = None
 
 
+class ExecuteIncidentRollbackRequest(BaseModel):
+    """Operator intent; all safety and eligibility facts are derived server-side."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    idempotency_key: IdempotencyKey
+    expected_incident_revision: int = Field(ge=1)
+    actor: str = Field(min_length=2, max_length=200)
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+    human_approved: bool = False
+
+
 class IncidentInvestigationView(BaseModel):
     """Operator-facing incident, evidence, analysis, and recovery state."""
 

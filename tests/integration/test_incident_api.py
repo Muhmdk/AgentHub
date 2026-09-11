@@ -9,7 +9,13 @@ from fastapi.testclient import TestClient
 
 from apps.api.config import Settings
 from apps.api.main import create_app
+from packages.contracts.delivery import CanaryAction, CanaryActionRequest, CreateCanaryRequest
+from packages.delivery.canary_repository import CanaryRepository
+from packages.delivery.repository import DeliveryRepository
+from packages.incidents.faults import TopKRegressionFault
 from packages.registry.database import Database
+from tests.integration.test_canary_repository import healthy_comparison
+from tests.integration.test_delivery_repository import _create_request, _eligible_releases
 
 NOW = datetime(2026, 9, 11, 8, tzinfo=UTC)
 
@@ -130,3 +136,87 @@ def test_incident_console_and_not_found_contract(incident_client: TestClient) ->
         "correlation_id": "incident-missing",
         "details": [],
     }
+
+
+def test_incident_rollback_api_derives_policy_facts_server_side(
+    incident_client: TestClient,
+    registry_database: Database,
+) -> None:
+    stable_id, candidate_id = _eligible_releases(registry_database)
+    routes = DeliveryRepository(registry_database)
+    route = routes.create(_create_request(stable_id, candidate_id)).route
+    canaries = CanaryRepository(registry_database)
+    canary = canaries.create(
+        CreateCanaryRequest(
+            idempotency_key="incident-api-rollback-canary",
+            route_id=route.id,
+            expected_route_revision=route.revision,
+            actor="delivery-controller",
+            reason="Create API rollback test canary",
+        )
+    ).rollout
+    canary = canaries.transition(
+        canary.id,
+        CanaryActionRequest(
+            idempotency_key="incident-api-rollback-start",
+            action=CanaryAction.START,
+            expected_revision=canary.revision,
+            expected_route_revision=route.revision,
+            actor="delivery-controller",
+            reason="Start API rollback test canary",
+            comparison=healthy_comparison(
+                route_id=route.id,
+                route_revision=route.revision,
+                stable_id=stable_id,
+                candidate_id=candidate_id,
+            ),
+            telemetry_healthy=True,
+        ),
+    )
+    route = routes.get(route.id)
+    scenario = TopKRegressionFault().build(
+        agent_name="knowledge-agent",
+        environment="production",
+        release_id=candidate_id,
+        route_id=route.id,
+        canary_rollout_id=canary.id,
+        observed_at=datetime.now(UTC),
+    )
+    detected = incident_client.post(
+        "/incidents/signals",
+        json={
+            "signal": scenario.signal.model_dump(mode="json"),
+            "actor": "incident-controller",
+        },
+    ).json()
+    incident = detected["result"]["incident"]
+    for item in scenario.evidence:
+        assert (
+            incident_client.post(
+                f"/incidents/{incident['id']}/evidence",
+                json=item.model_dump(mode="json"),
+                headers={"X-AgentHub-Actor": "evidence-collector"},
+            ).status_code
+            == 200
+        )
+    intent = {
+        "idempotency_key": "incident-api-policy-rollback",
+        "expected_incident_revision": incident["revision"],
+        "actor": "operator-console",
+        "reason": "Restore the persisted known-good stable release",
+        "human_approved": False,
+    }
+    injected_fact = incident_client.post(
+        f"/incidents/{incident['id']}/rollback",
+        json={**intent, "evidence_count": 999, "guardrail_breached": True},
+    )
+    rollback = incident_client.post(
+        f"/incidents/{incident['id']}/rollback",
+        json=intent,
+    )
+
+    assert injected_fact.status_code == 422
+    assert rollback.status_code == 200
+    assert rollback.json()["operation"]["mode"] == "automatic"
+    assert rollback.json()["operation"]["status"] == "executed"
+    assert routes.get(route.id).allocation.candidate_weight_basis_points == 0

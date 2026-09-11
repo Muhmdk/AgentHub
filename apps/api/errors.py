@@ -18,8 +18,11 @@ from packages.delivery.repository import (
 )
 from packages.evaluation.repository import EvaluationConflictError, EvaluationNotFoundError
 from packages.evaluation.service import EvaluationTargetNotFoundError
+from packages.incidents.coordinator import RollbackPolicyBlockedError
 from packages.incidents.evidence_repository import EvidenceConflictError
 from packages.incidents.repository import IncidentConflictError, IncidentNotFoundError
+from packages.incidents.rollback import RollbackValidationError
+from packages.incidents.rollback_repository import RollbackConflictError
 from packages.registry.repository import RegistryConflictError, RegistryNotFoundError
 from packages.release.repository import (
     ReleaseBlockedError,
@@ -304,6 +307,21 @@ async def incident_conflict_handler(request: Request, exc: Exception) -> Respons
     )
 
 
+async def rollback_blocked_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(
+        exc, RollbackPolicyBlockedError | RollbackValidationError | RollbackConflictError
+    ):  # pragma: no cover
+        raise TypeError("Expected rollback conflict")
+    return _response(
+        409,
+        ErrorPayload(
+            code="rollback_blocked",
+            message=str(exc),
+            correlation_id=_correlation_id(request),
+        ),
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register all public API exception contracts."""
     handlers: tuple[tuple[type[Exception], ExceptionHandler], ...] = (
@@ -322,6 +340,9 @@ def register_error_handlers(app: FastAPI) -> None:
         (IncidentNotFoundError, incident_not_found_handler),
         (IncidentConflictError, incident_conflict_handler),
         (EvidenceConflictError, incident_conflict_handler),
+        (RollbackPolicyBlockedError, rollback_blocked_handler),
+        (RollbackValidationError, rollback_blocked_handler),
+        (RollbackConflictError, rollback_blocked_handler),
         (StarletteHTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),

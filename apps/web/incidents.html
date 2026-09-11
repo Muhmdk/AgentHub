@@ -39,6 +39,8 @@
       .timeline time { color: #fb923c; font: .68rem ui-monospace, monospace; }
       .empty { padding: 20px 0; color: #8f776c; }
       .warning { color: #fecaca; }
+      button.action { border: 1px solid #a64b2a; border-radius: 8px; padding: 9px 12px; color: #fff7ed; background: #7c2d12; cursor: pointer; }
+      button.action:hover { background: #9a3412; }
       @media (max-width: 860px) { header, .layout { grid-template-columns: 1fr; } .claims { grid-template-columns: 1fr; } }
     </style>
   </head>
@@ -58,6 +60,7 @@
           <section class="panel hero">
             <div class="row"><div><h2 id="title"></h2><p id="identity" class="muted"></p></div><span class="tag" id="state"></span></div>
             <p id="cause"></p>
+            <div><button type="button" class="action" id="rollback">Approve / request known-good rollback</button></div>
           </section>
           <section class="panel">
             <div class="panel-head"><h2>Source-cited findings</h2><span class="tag">deterministic</span></div>
@@ -79,6 +82,7 @@
       const byId = id => document.getElementById(id);
       const node = (name, value, className) => { const item = document.createElement(name); item.textContent = value; if (className) item.className = className; return item; };
       let selected = null;
+      let selectedView = null;
 
       function incidentButton(incident) {
         const button = node("button", "", "incident");
@@ -119,9 +123,11 @@
         const response = await fetch(`/incidents/${id}/investigation`);
         if (!response.ok) throw new Error("Incident investigation API is unavailable");
         const view = await response.json(); const analysis = view.analysis;
+        selectedView = view;
         byId("detail").hidden = false; byId("title").textContent = view.incident.title;
         byId("identity").textContent = `${view.incident.agent_name} · ${view.incident.environment} · revision ${view.incident.revision}`;
         byId("state").textContent = view.incident.status;
+        byId("rollback").hidden = !view.incident.route_id || !view.incident.canary_rollout_id || ["resolved", "escalated"].includes(view.incident.status);
         byId("cause").textContent = analysis.probable_cause ? analysis.probable_cause.statement : "No probable cause can be supported by the stored evidence yet.";
         const claims = [...analysis.findings, ...analysis.counter_evidence];
         byId("claims").replaceChildren(...(claims.length ? claims.map(claimCard) : [node("p", "No supported findings yet.", "empty")]));
@@ -131,6 +137,21 @@
         byId("evidence-count").textContent = `${view.timeline.entries.length} events`;
         byId("status").textContent = `Updated ${new Date(view.timeline.generated_at).toLocaleString()} · every finding links to stored evidence`;
       }
+
+      byId("rollback").addEventListener("click", async () => {
+        if (!selectedView) return;
+        byId("status").textContent = "Evaluating persisted evidence and rollback policy…";
+        try {
+          const response = await fetch(`/incidents/${selectedView.incident.id}/rollback`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ idempotency_key: `console-rollback-${selectedView.incident.id}`, expected_incident_revision: selectedView.incident.revision, actor: "operator-console", reason: "Operator requested the immutable known-good recovery path", human_approved: true })
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error?.message || "Rollback policy blocked the request");
+          byId("status").textContent = `Rollback ${result.operation.status}; recovery verification must still pass.`;
+          await load();
+        } catch (error) { byId("status").textContent = error.message; }
+      });
 
       async function load() {
         const response = await fetch("/incidents");
