@@ -39,11 +39,14 @@ helm upgrade --install agenthub deploy/helm/agenthub \
 
 Dev does not render credentials. The Secrets Store CSI driver mounts the selected Key Vault
 objects and syncs the passwordless application database URL and Azure Monitor routing string to
-the `agenthub-runtime` Secret consumed by the API. The pre-install migration hook uses its separate
-annotated service account, obtains a short-lived PostgreSQL token, creates the non-admin workload
-role, applies Alembic migrations, and grants only application DML access. The application obtains a
-fresh token for every new pooled connection. Both service accounts exactly match the Terraform
-workload identity subjects.
+the `agenthub-runtime` Secret consumed by the API. The same secret supplies the JSON
+identity-to-token map used by the authenticated gateway; no token appears in chart values or the
+runtime ConfigMap. The dev profile enables the digest-pinned OPA sidecar and points the API at its
+loopback decision endpoint. The pre-install migration hook uses its separate annotated service
+account, obtains a short-lived PostgreSQL token, creates the non-admin workload role, applies
+Alembic migrations, and grants only application DML access. The application obtains a fresh token
+for every new pooled connection. Both service accounts exactly match the Terraform workload
+identity subjects.
 
 The dev profile sends traces and metrics directly to Azure Monitor through managed identity. The
 local profile retains the vendor-neutral OTLP/HTTP exporter and local Collector. Index creation and
@@ -60,3 +63,6 @@ The dev HPA scales from one to at most two replicas at 70% requested CPU, adds o
 minute, and waits five minutes before scaling down. PDB creation stays disabled for the single-node
 dev cluster because a one-replica PDB would block voluntary maintenance without providing
 availability. Enable it only after adding another node and maintaining at least two replicas.
+Runtime rate, token, and cost windows are process-local, so two replicas each enforce one copy of
+the configured limit. Keep one replica when a strict deployment-wide ceiling is required; a
+shared atomic budget backend is required before treating a scaled deployment as one global budget.

@@ -7,9 +7,9 @@ is being delivered in twelve independently reviewable phases described in
 
 ## Current status
 
-Phases 00 through 06 provide the local development foundation, three bounded demonstration
+Phases 00 through 08 provide the local development foundation, three bounded demonstration
 agents, an immutable registry, reproducible evaluations, an observability/SLO plane, and an
-immutable CI/CD release path.
+immutable CI/CD release path with an authenticated governance gateway.
 The repository currently includes:
 
 - FastAPI liveness, readiness, and version endpoints;
@@ -37,13 +37,17 @@ The repository currently includes:
 - split PR, candidate-evaluation, release, and infrastructure workflows;
 - non-root reproducible images, digest publication, high/critical scan gates, SBOMs, and attestations;
 - protected staging and production approvals backed by short-lived GitHub OIDC identity;
+- an authenticated AI Gateway with per-model/tool policy enforcement and explicit local identities;
+- versioned OPA/Rego rules for scopes, environments, risk approvals, models, tokens, and PII;
+- deterministic pre-provider PII redaction plus per-agent/model rate, token, and cost controls;
+- append-only sanitized governance decisions and an operator policy/audit console;
 - synthetic store, SKU, inventory, sales, promotion, and weather evidence;
 - unit, contract, and process-level smoke tests;
 - linting, formatting, strict typing, coverage, secret scanning, and dependency auditing;
 - least-privilege, SHA-pinned GitHub Actions workflows.
 
-Advanced policy-as-code, progressive delivery, and incident automation are planned for later
-phases and are not represented as implemented here.
+Progressive delivery and incident automation are planned for later phases and are not represented
+as implemented here.
 
 ## Prerequisites
 
@@ -121,7 +125,8 @@ Stop the foreground server with `Ctrl-C`. Interactive API documentation is avail
 `http://127.0.0.1:8000/docs` while the service is running. The registry console is available at
 `http://127.0.0.1:8000/registry`; evaluation comparison is at
 `http://127.0.0.1:8000/evaluations`; fleet health is at
-`http://127.0.0.1:8000/observability`. Run `make down` when local services are no longer needed.
+`http://127.0.0.1:8000/observability`; governance policy and audit history are at
+`http://127.0.0.1:8000/governance`. Run `make down` when local services are no longer needed.
 
 For local traces, metrics, dashboards, SLOs, alerts, and runbooks, see the
 [observability guide](docs/observability.md).
@@ -178,9 +183,10 @@ cannot leave `evaluated`. See the [release pipeline guide](docs/releases.md) and
 | `GET /health/live` | Confirms the process can serve requests | `200` |
 | `GET /health/ready` | Confirms current process dependencies are ready | `200` |
 | `GET /version` | Reports service, build version, and environment | `200` |
-| `POST /agents/inventory/invoke` | Runs the bounded Inventory Agent | `200` |
-| `POST /agents/knowledge/invoke` | Answers from trusted policy evidence or abstains | `200` |
-| `POST /agents/shopping/invoke` | Recommends a retrieved product through `product.search` | `200` |
+| `POST /gateway/agents/{name}/invoke` | Authenticates and invokes an agent through the governed data plane | `200` |
+| `POST /agents/inventory/invoke` | Local/test-only compatibility route for Inventory Agent | `200` |
+| `POST /agents/knowledge/invoke` | Local/test-only compatibility route for Knowledge Agent | `200` |
+| `POST /agents/shopping/invoke` | Local/test-only compatibility route for Shopping Agent | `200` |
 | `POST /registry/agents` | Idempotently registers an immutable manifest | `200` |
 | `GET /registry/agents` | Lists persisted agent identities and current state | `200` |
 | `GET /registry/agents/{name}` | Gets one agent summary | `200` |
@@ -200,6 +206,8 @@ cannot leave `evaluated`. See the [release pipeline guide](docs/releases.md) and
 | `GET /releases/{release_id}/notes` | Generates release notes from stored provenance | `200` |
 | `GET /observability/fleet` | Reports live fleet signals, SLOs, budgets, and burn rates | `200` |
 | `GET /observability/agents/{name}` | Reports one agent's observability detail | `200` |
+| `GET /governance/policy` | Reports the safe active policy, agent grants, and budget posture | `200` |
+| `GET /governance/audit` | Lists bounded, filterable, sanitized policy and enforcement events | `200` |
 
 Clients may provide `X-Correlation-ID` using letters, numbers, `.`, `_`, `:`, or `-`, up
 to 128 characters. AgentHub returns the accepted ID in the response. Missing or unsafe
@@ -240,7 +248,16 @@ take the same names and take precedence.
 | `AGENTHUB_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `AGENTHUB_API_HOST` | `127.0.0.1` | Non-empty host string |
 | `AGENTHUB_API_PORT` | `8000` | `1` through `65535` |
+| `AGENTHUB_GATEWAY_SERVICE_TOKENS` | `{}` | Secret JSON identity-to-token map; required outside local/test |
+| `AGENTHUB_POLICY_ENGINE_URL` | unset locally | Required HTTP(S) OPA decision URL when deployed |
+| `AGENTHUB_POLICY_TIMEOUT_SECONDS` | `2.0` | Greater than `0`, at most `30` |
 | `AGENTHUB_MODEL_PROVIDER` | `fake` | `fake` or `azure-openai` |
+| `AGENTHUB_MODEL_REQUESTS_PER_MINUTE` | `120` | `1` through `100000` per agent/model/process |
+| `AGENTHUB_MODEL_TOKENS_PER_MINUTE` | `100000` | `1` through `10000000` per agent/model/process |
+| `AGENTHUB_MODEL_COST_PER_HOUR_USD` | `10.0` | `0` through `100000` per agent/model/process |
+| `AGENTHUB_MODEL_TIMEOUT_SECONDS` | `10.0` | Greater than `0`, at most `120` |
+| `AGENTHUB_MODEL_MAX_ATTEMPTS` | `2` | `1` through `3` |
+| `AGENTHUB_MODEL_RETRY_BACKOFF_SECONDS` | `0.05` | `0` through `5` |
 | `AGENTHUB_RETRIEVAL_PROVIDER` | `local` | `local` or `azure-search` |
 | `AGENTHUB_AGENT_MAX_STEPS` | `3` | `1` through `20` |
 | `AGENTHUB_TOOL_TIMEOUT_SECONDS` | `1.0` | Greater than `0`, at most `30` |
@@ -314,6 +331,9 @@ recorded in [ADR 0003](docs/adr/0003-deterministic-local-retrieval.md), and regi
 in [ADR 0004](docs/adr/0004-postgresql-immutable-registry.md). Evaluation and release-gate
 determinism is recorded in [ADR 0005](docs/adr/0005-deterministic-evaluation-gates.md).
 
+The [governance guide](docs/governance.md) documents the gateway, decision contract, runtime
+controls, append-only audit schema, failure behavior, and emergency recovery boundary.
+
 ## Repository layout
 
 ```text
@@ -323,6 +343,7 @@ packages/contracts/        Shared runtime, retrieval, evaluation, health, and er
 packages/registry/         PostgreSQL repository, lifecycle, bootstrap, and records
 packages/evaluation/       Runner, evaluators, gates, persistence, service, and CLI
 packages/release/          Candidate provenance, guarded state, persistence, service, and CLI
+packages/governance/       Policy engines, runtime authorization, redaction, budgets, and audit
 agents/shared/             Provider-neutral model, retrieval, corpus, and benchmark code
 agents/inventory/          Bounded graph, CLI, and read-only retail tools
 agents/knowledge/          Grounded policy-question agent and CLI
@@ -330,6 +351,7 @@ agents/shopping/           Grounded recommendation agent, product tool, and CLI
 data/synthetic/            Versioned fictional retail evidence
 data/evals/                Versioned datasets, suites, gates, and retrieval fixtures
 data/manifests/            Versioned manifests for the three demonstration agents
+policies/                  Versioned OPA/Rego bundle and offline decision tests
 migrations/                Alembic environment and transactional schema revisions
 schemas/                   Published Agent Manifest JSON Schema
 tests/unit/                Configuration and logging behavior
