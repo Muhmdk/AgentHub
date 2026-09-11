@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from agents.inventory.agent import InventoryAgent
@@ -29,6 +29,7 @@ from packages.contracts.evaluation import (
     GateDecision,
     RunEvaluationRequest,
 )
+from packages.contracts.governance import GovernanceAuditEvent, GovernanceAuditOutcome
 from packages.contracts.health import HealthResponse, VersionResponse
 from packages.contracts.manifest import AgentManifest
 from packages.contracts.observability import AgentHealth, FleetHealth
@@ -56,6 +57,9 @@ from packages.governance import (
     AuthorizedTool,
     BudgetLimits,
     BudgetManager,
+    GovernanceAuditRepository,
+    GovernanceAuditStore,
+    InMemoryGovernanceAuditStore,
     LocalPolicyEngine,
     OPAHttpPolicyEngine,
     PolicyAuthorizer,
@@ -84,6 +88,7 @@ def create_app(
     release_store: ReleaseStore | None = None,
     telemetry_instance: Telemetry | None = None,
     policy_engine: PolicyEngine | None = None,
+    governance_audit_store: GovernanceAuditStore | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
     app_settings = settings or load_settings()
@@ -104,6 +109,24 @@ def create_app(
     )
     providers = create_provider_bundle(app_settings)
     model = providers.model
+    registry_database = database
+    owns_registry_database = False
+    if registry_store is None and registry_database is None:
+        registry_database = create_database(app_settings, providers)
+        owns_registry_database = True
+    if registry_store is None:
+        if registry_database is None:  # pragma: no cover - guarded above
+            raise ValueError("A database is required without a registry store")
+        registry: RegistryStore = RegistryRepository(registry_database)
+    else:
+        registry = registry_store
+    active_audit_store = governance_audit_store
+    if active_audit_store is None:
+        active_audit_store = (
+            GovernanceAuditRepository(registry_database)
+            if registry_database is not None
+            else InMemoryGovernanceAuditStore()
+        )
     active_policy_engine = policy_engine
     if active_policy_engine is None:
         if app_settings.policy_engine_url is not None:
@@ -124,16 +147,19 @@ def create_app(
         active_policy_engine,
         profiles["inventory-agent"],
         app_settings.environment,
+        active_audit_store,
     )
     knowledge_authorizer = PolicyAuthorizer(
         active_policy_engine,
         profiles["knowledge-agent"],
         app_settings.environment,
+        active_audit_store,
     )
     shopping_authorizer = PolicyAuthorizer(
         active_policy_engine,
         profiles["shopping-agent"],
         app_settings.environment,
+        active_audit_store,
     )
 
     def governed_model(authorizer: PolicyAuthorizer) -> AuthorizedChatModel:
@@ -194,15 +220,6 @@ def create_app(
         timeout_seconds=app_settings.agent_timeout_seconds,
         telemetry=telemetry,
     )
-    registry_database = database
-    owns_registry_database = False
-    if registry_store is None:
-        if registry_database is None:
-            registry_database = create_database(app_settings, providers)
-            owns_registry_database = True
-        registry: RegistryStore = RegistryRepository(registry_database)
-    else:
-        registry = registry_store
     evaluations: EvaluationStore
     if evaluation_store is not None:
         evaluations = evaluation_store
@@ -256,6 +273,7 @@ def create_app(
     app.state.releases = releases
     app.state.database = registry_database
     app.state.policy_engine = active_policy_engine
+    app.state.governance_audit = active_audit_store
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
 
@@ -574,6 +592,23 @@ def create_app(
     @app.get("/observability", response_class=FileResponse, include_in_schema=False)
     async def observability_console() -> FileResponse:
         return FileResponse(observability_page_path())
+
+    @app.get(
+        "/governance/audit",
+        response_model=list[GovernanceAuditEvent],
+        tags=["governance"],
+    )
+    async def list_governance_audit(
+        agent_name: str | None = None,
+        outcome: GovernanceAuditOutcome | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[GovernanceAuditEvent]:
+        return await asyncio.to_thread(
+            active_audit_store.list_events,
+            agent_name=agent_name,
+            outcome=outcome,
+            limit=limit,
+        )
 
     return app
 

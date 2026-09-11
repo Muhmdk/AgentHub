@@ -1,7 +1,8 @@
-"""Versioned policy input and decision contracts shared with OPA/Rego."""
+"""Versioned policy input, decision, and sanitized audit contracts."""
 
 from enum import StrEnum
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints
 
@@ -246,3 +247,48 @@ class OPAResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     result: PolicyDecision
+
+
+class GovernanceAuditEventType(StrEnum):
+    """Append-only governance event categories."""
+
+    POLICY_DECISION = "policy_decision"
+    RUNTIME_ENFORCEMENT = "runtime_enforcement"
+
+
+class GovernanceAuditOutcome(StrEnum):
+    """Stable decision and enforcement outcomes for operators."""
+
+    ALLOW = "allow"
+    DENY = "deny"
+    POLICY_UNAVAILABLE = "policy_unavailable"
+    RATE_LIMITED = "rate_limited"
+    BUDGET_EXCEEDED = "budget_exceeded"
+
+
+class GovernanceAuditEvent(BaseModel):
+    """Sanitized policy evidence safe for durable operator audit."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    event_type: GovernanceAuditEventType
+    outcome: GovernanceAuditOutcome
+    allowed: bool
+    identity: Identity
+    agent_name: Slug
+    agent_version: SemanticVersion
+    action_kind: Literal[
+        "registration",
+        "promotion",
+        "model_invocation",
+        "tool_execution",
+    ]
+    target: PolicyString
+    policy_bundle_version: PolicyBundleVersion
+    reasons: list[ReasonCode] = Field(min_length=1, max_length=50)
+    obligations: PolicyObligations = Field(default_factory=PolicyObligations)
+    occurred_at: AwareDatetime
+    correlation_id: Identity
+    release_id: Identity | None = None
+    sanitized_input: PolicyInput

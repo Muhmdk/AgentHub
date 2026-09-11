@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from apps.api.config import Settings
 from apps.api.main import create_app
 from packages.contracts.governance import PolicyDecision, PolicyInput, PolicyObligations
+from packages.governance import InMemoryGovernanceAuditStore
 from packages.registry.database import Database
 
 _GATEWAY_TOKEN = "gateway-contract-token-with-at-least-32-characters"
@@ -48,7 +49,10 @@ class UnreadyDatabase(Database):
 
 @pytest.fixture
 def client() -> TestClient:
-    app = create_app(Settings(environment="test", version="0.1.0-test", _env_file=None))
+    app = create_app(
+        Settings(environment="test", version="0.1.0-test", _env_file=None),
+        governance_audit_store=InMemoryGovernanceAuditStore(),
+    )
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -238,9 +242,11 @@ def test_gateway_rejects_unknown_agent_after_authentication(client: TestClient) 
 
 @pytest.mark.contract
 def test_runtime_policy_deny_returns_stable_gateway_error() -> None:
+    audit_store = InMemoryGovernanceAuditStore()
     app = create_app(
         Settings(environment="test", _env_file=None),
         policy_engine=DenyingPolicyEngine(),
+        governance_audit_store=audit_store,
     )
 
     with TestClient(app, raise_server_exceptions=False) as denied_client:
@@ -252,6 +258,10 @@ def test_runtime_policy_deny_returns_stable_gateway_error() -> None:
                 "X-Correlation-ID": "policy-deny-contract",
             },
         )
+        audit = denied_client.get(
+            "/governance/audit",
+            params={"agent_name": "inventory-agent", "outcome": "deny"},
+        )
 
     assert response.status_code == 403
     assert response.json() == {
@@ -262,6 +272,12 @@ def test_runtime_policy_deny_returns_stable_gateway_error() -> None:
             "details": [],
         }
     }
+    assert audit.status_code == 200
+    assert len(audit.json()) == 1
+    assert audit.json()[0]["identity"] == "local/contract-test"
+    assert audit.json()[0]["correlation_id"] == "policy-deny-contract"
+    assert audit.json()[0]["target"] == "inventory.read"
+    assert "Toronto" not in audit.text
 
 
 @pytest.mark.contract
@@ -274,6 +290,7 @@ def test_production_exposes_only_authenticated_gateway_invocation() -> None:
             _env_file=None,
         ),
         policy_engine=AllowingPolicyEngine(),
+        governance_audit_store=InMemoryGovernanceAuditStore(),
     )
 
     with TestClient(app, raise_server_exceptions=False) as production_client:

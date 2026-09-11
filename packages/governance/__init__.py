@@ -15,6 +15,11 @@ from packages.governance.privacy import (
     redact_text,
 )
 from packages.governance.profiles import agent_policy_profiles
+from packages.governance.repository import (
+    GovernanceAuditRepository,
+    GovernanceAuditStore,
+    InMemoryGovernanceAuditStore,
+)
 from packages.governance.runtime import (
     AuthorizedChatModel,
     AuthorizedTool,
@@ -29,6 +34,9 @@ __all__ = [
     "BudgetKey",
     "BudgetLimits",
     "BudgetManager",
+    "GovernanceAuditRepository",
+    "GovernanceAuditStore",
+    "InMemoryGovernanceAuditStore",
     "LocalPolicyEngine",
     "OPAHttpPolicyEngine",
     "PIIFinding",

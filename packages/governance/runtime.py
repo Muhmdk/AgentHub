@@ -9,14 +9,19 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
+from uuid import uuid4
 
 from agents.shared.model import ChatModel, RetryableModelError
 from packages.contracts.governance import (
     DataClass,
+    GovernanceAuditEvent,
+    GovernanceAuditEventType,
+    GovernanceAuditOutcome,
     ModelInvocationAction,
     PolicyAgent,
     PolicyDecision,
     PolicyInput,
+    PolicyObligations,
     PolicyRequestContext,
     PolicySubject,
     ToolAccess,
@@ -40,6 +45,10 @@ from packages.governance.budgets import (
 )
 from packages.governance.engine import PolicyEngine, PolicyEngineUnavailable
 from packages.governance.privacy import detect_pii, redact_model_request
+from packages.governance.repository import (
+    GovernanceAuditStore,
+    InMemoryGovernanceAuditStore,
+)
 
 
 @dataclass(frozen=True)
@@ -49,6 +58,14 @@ class RuntimePolicyContext:
     subject: PolicySubject
     correlation_id: str
     release_id: str | None
+
+
+@dataclass(frozen=True)
+class PolicyAuthorization:
+    """An allowed decision together with its sanitized reproducibility input."""
+
+    policy_input: PolicyInput
+    decision: PolicyDecision
 
 
 _runtime_context: ContextVar[RuntimePolicyContext | None] = ContextVar(
@@ -70,10 +87,17 @@ def bind_policy_context(context: RuntimePolicyContext) -> Iterator[None]:
 class PolicyAuthorizer:
     """Build runtime policy inputs and fail closed on deny or engine outage."""
 
-    def __init__(self, engine: PolicyEngine, agent: PolicyAgent, environment: str) -> None:
+    def __init__(
+        self,
+        engine: PolicyEngine,
+        agent: PolicyAgent,
+        environment: str,
+        audit_store: GovernanceAuditStore | None = None,
+    ) -> None:
         self._engine = engine
         self._agent = agent
         self._environment = environment
+        self._audit_store = audit_store or InMemoryGovernanceAuditStore()
 
     @property
     def external_model(self) -> bool:
@@ -97,7 +121,7 @@ class PolicyAuthorizer:
         required_scopes: list[str],
         access: ToolAccess,
         arguments: dict[str, JsonValue],
-    ) -> PolicyDecision:
+    ) -> PolicyAuthorization:
         canonical = json.dumps(arguments, separators=(",", ":"), sort_keys=True)
         action = ToolExecutionAction(
             kind="tool_execution",
@@ -113,7 +137,7 @@ class PolicyAuthorizer:
         request: ModelRequest,
         *,
         data_classes: list[DataClass] | None = None,
-    ) -> PolicyDecision:
+    ) -> PolicyAuthorization:
         provider = self._agent.model.provider
         model = self._agent.model.model
         input_characters = sum(len(message.content) for message in request.messages)
@@ -131,7 +155,7 @@ class PolicyAuthorizer:
     async def _authorize(
         self,
         action: ModelInvocationAction | ToolExecutionAction,
-    ) -> PolicyDecision:
+    ) -> PolicyAuthorization:
         context = self._context()
         policy_input = PolicyInput(
             schema_version="agenthub.dev/policy-input/v1",
@@ -148,16 +172,102 @@ class PolicyAuthorizer:
         try:
             decision = await self._engine.decide(policy_input)
         except PolicyEngineUnavailable:
+            await self._append_audit(
+                policy_input,
+                event_type=GovernanceAuditEventType.POLICY_DECISION,
+                outcome=GovernanceAuditOutcome.POLICY_UNAVAILABLE,
+                allowed=False,
+                policy_bundle_version="unavailable",
+                reasons=["policy_engine_unavailable"],
+                obligations=PolicyObligations(),
+            )
             raise AgentExecutionError(
                 AgentErrorCode.POLICY_UNAVAILABLE,
                 "Policy authorization is unavailable",
             ) from None
+        await self._append_audit(
+            policy_input,
+            event_type=GovernanceAuditEventType.POLICY_DECISION,
+            outcome=(
+                GovernanceAuditOutcome.ALLOW if decision.allow else GovernanceAuditOutcome.DENY
+            ),
+            allowed=decision.allow,
+            policy_bundle_version=decision.policy_bundle_version,
+            reasons=decision.reasons,
+            obligations=decision.obligations,
+        )
         if not decision.allow:
             raise AgentExecutionError(
                 AgentErrorCode.POLICY_DENIED,
                 "Action denied by policy",
             )
-        return decision
+        return PolicyAuthorization(policy_input=policy_input, decision=decision)
+
+    async def record_enforcement(
+        self,
+        authorization: PolicyAuthorization,
+        *,
+        outcome: GovernanceAuditOutcome,
+        reason: str,
+    ) -> None:
+        """Append a denied runtime control that follows an allowed policy decision."""
+        await self._append_audit(
+            authorization.policy_input,
+            event_type=GovernanceAuditEventType.RUNTIME_ENFORCEMENT,
+            outcome=outcome,
+            allowed=False,
+            policy_bundle_version=authorization.decision.policy_bundle_version,
+            reasons=[reason],
+            obligations=authorization.decision.obligations,
+        )
+
+    async def _append_audit(
+        self,
+        policy_input: PolicyInput,
+        *,
+        event_type: GovernanceAuditEventType,
+        outcome: GovernanceAuditOutcome,
+        allowed: bool,
+        policy_bundle_version: str,
+        reasons: list[str],
+        obligations: PolicyObligations,
+    ) -> None:
+        event = GovernanceAuditEvent(
+            id=uuid4(),
+            event_type=event_type,
+            outcome=outcome,
+            allowed=allowed,
+            identity=policy_input.subject.identity,
+            agent_name=policy_input.agent.name,
+            agent_version=policy_input.agent.version,
+            action_kind=policy_input.action.kind,
+            target=self._action_target(policy_input),
+            policy_bundle_version=policy_bundle_version,
+            reasons=reasons,
+            obligations=obligations,
+            occurred_at=datetime.now(UTC),
+            correlation_id=policy_input.context.correlation_id,
+            release_id=policy_input.context.release_id,
+            sanitized_input=policy_input,
+        )
+        try:
+            await asyncio.to_thread(self._audit_store.append, event)
+        except Exception:
+            raise AgentExecutionError(
+                AgentErrorCode.POLICY_UNAVAILABLE,
+                "Governance audit is unavailable",
+            ) from None
+
+    @staticmethod
+    def _action_target(policy_input: PolicyInput) -> str:
+        action = policy_input.action
+        if isinstance(action, ModelInvocationAction):
+            return f"{action.provider}/{action.model}"
+        if isinstance(action, ToolExecutionAction):
+            return action.tool_name
+        if action.kind == "registration":
+            return action.manifest_hash
+        return action.target_environment.value
 
     def _context(self) -> RuntimePolicyContext:
         context = _runtime_context.get()
@@ -223,10 +333,11 @@ class AuthorizedChatModel:
         data_classes = [DataClass.INTERNAL]
         if contains_pii:
             data_classes.append(DataClass.PII)
-        decision = await self._authorizer.authorize_model(
+        authorization = await self._authorizer.authorize_model(
             request,
             data_classes=data_classes,
         )
+        decision = authorization.decision
         if contains_pii and self._authorizer.external_model:
             if not decision.obligations.redact_pii:
                 raise AgentExecutionError(
@@ -260,11 +371,21 @@ class AuthorizedChatModel:
                 cost_usd=estimated_cost,
             )
         except RateLimitExceeded:
+            await self._authorizer.record_enforcement(
+                authorization,
+                outcome=GovernanceAuditOutcome.RATE_LIMITED,
+                reason="model_rate_limit_exceeded",
+            )
             raise AgentExecutionError(
                 AgentErrorCode.RATE_LIMITED,
                 "Model rate limit exceeded",
             ) from None
         except BudgetExceeded:
+            await self._authorizer.record_enforcement(
+                authorization,
+                outcome=GovernanceAuditOutcome.BUDGET_EXCEEDED,
+                reason="model_budget_exceeded",
+            )
             raise AgentExecutionError(
                 AgentErrorCode.BUDGET_EXCEEDED,
                 "Model budget exceeded",

@@ -30,6 +30,7 @@ from packages.governance import (
     AuthorizedTool,
     BudgetLimits,
     BudgetManager,
+    InMemoryGovernanceAuditStore,
     PolicyAuthorizer,
     PolicyEngineUnavailable,
     RuntimePolicyContext,
@@ -117,9 +118,13 @@ class RecordingTool:
         )
 
 
-def _authorizer(engine: RecordingPolicyEngine, environment: str = "test") -> PolicyAuthorizer:
+def _authorizer(
+    engine: RecordingPolicyEngine,
+    environment: str = "test",
+    audit_store: InMemoryGovernanceAuditStore | None = None,
+) -> PolicyAuthorizer:
     profile = agent_policy_profiles("fake/deterministic-v1")["inventory-agent"]
-    return PolicyAuthorizer(engine, profile, environment)
+    return PolicyAuthorizer(engine, profile, environment, audit_store)
 
 
 @pytest.mark.unit
