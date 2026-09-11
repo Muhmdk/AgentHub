@@ -9,11 +9,17 @@ from sqlalchemy.exc import DBAPIError
 
 from packages.contracts.delivery import DeliveryEnvironment
 from packages.contracts.incident import (
+    EvidenceInput,
+    EvidenceKind,
     IncidentSeverity,
     IncidentSignal,
     IncidentStatus,
     IncidentTriggerType,
     ObserveIncidentSignalRequest,
+)
+from packages.incidents.evidence_repository import (
+    EvidenceConflictError,
+    IncidentEvidenceRepository,
 )
 from packages.incidents.repository import (
     IncidentConflictError,
@@ -45,7 +51,7 @@ def _signal(**updates: object) -> IncidentSignal:
 @pytest.mark.integration
 def test_incident_migration_created_intake_tables(registry_database: Database) -> None:
     tables = set(inspect(registry_database.engine).get_table_names())
-    assert {"incidents", "incident_triggers"} <= tables
+    assert {"incidents", "incident_triggers", "incident_evidence"} <= tables
 
 
 @pytest.mark.integration
@@ -135,3 +141,48 @@ def test_database_protects_incident_identity_and_trigger_history(
 def test_missing_incident_returns_a_stable_error(registry_database: Database) -> None:
     with pytest.raises(IncidentNotFoundError, match="Incident was not found"):
         IncidentRepository(registry_database).get(uuid4())
+
+
+@pytest.mark.integration
+def test_evidence_is_content_addressed_idempotent_and_append_only(
+    registry_database: Database,
+) -> None:
+    detection = IncidentService(IncidentRepository(registry_database)).observe(
+        ObserveIncidentSignalRequest(signal=_signal(), actor="incident-controller")
+    )
+    assert detection.result is not None
+    incident_id = detection.result.incident.id
+    repository = IncidentEvidenceRepository(registry_database)
+    item = EvidenceInput(
+        idempotency_key="incident-metric-evidence",
+        kind=EvidenceKind.METRIC,
+        source_ref="telemetry://shopping-agent/error-rate",
+        summary="Error rate remained above the production threshold",
+        occurred_at=datetime(2026, 9, 10, 20, 1, tzinfo=UTC),
+        subject_id="agent.error_rate",
+        attributes={"value": 0.08, "threshold": 0.01},
+    )
+
+    first = repository.append(incident_id, item, "evidence-collector")
+    replay = repository.append(incident_id, item, "evidence-collector")
+
+    assert first.created is True
+    assert replay.created is False
+    assert replay.evidence == first.evidence
+    assert len(first.evidence.content_hash) == 64
+    assert repository.list_evidence(incident_id) == [first.evidence]
+
+    with pytest.raises(EvidenceConflictError, match="different immutable item"):
+        repository.append(
+            incident_id,
+            item.model_copy(update={"attributes": {"value": 0.09}}),
+            "evidence-collector",
+        )
+    with (
+        pytest.raises(DBAPIError, match="incident evidence is append-only"),
+        registry_database.transaction() as session,
+    ):
+        session.execute(
+            text("DELETE FROM incident_evidence WHERE incident_id = :id"),
+            {"id": incident_id},
+        )

@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -104,5 +105,39 @@ class IncidentTriggerRecord(RegistryBase):
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class IncidentEvidenceRecord(RegistryBase):
+    __tablename__ = "incident_evidence"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('metric', 'trace', 'sanitized_log', 'deployment', 'config_diff', "
+            "'evaluation', 'kubernetes_event', 'policy_decision', 'prior_incident')",
+            name="ck_incident_evidence_kind",
+        ),
+        CheckConstraint("length(content_hash) = 64", name="ck_incident_evidence_content_hash"),
+        CheckConstraint("length(fingerprint) = 64", name="ck_incident_evidence_fingerprint"),
+        UniqueConstraint("idempotency_key", name="uq_incident_evidence_key"),
+        Index("ix_incident_evidence_incident_time", "incident_id", "occurred_at"),
+        Index("ix_incident_evidence_content_hash", "content_hash"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    incident_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("incidents.id", ondelete="RESTRICT"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_ref: Mapped[str] = mapped_column(String(500), nullable=False)
+    summary: Mapped[str] = mapped_column(String(500), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    subject_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    attributes: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    collected_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )

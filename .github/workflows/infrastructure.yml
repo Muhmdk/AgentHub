@@ -97,6 +97,6 @@ jobs:
       - name: Validate migrations from an empty database
         run: |
           make migrate
-          test "$(.venv/bin/alembic current | awk '{print $1}')" = 0007_incidents
+          test "$(.venv/bin/alembic current | awk '{print $1}')" = 0008_incident_evidence
       - name: Build deployable image
         run: docker build --build-arg SOURCE_SHA="${GITHUB_SHA}" --tag agenthub:infra .

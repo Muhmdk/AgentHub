@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from packages.contracts.delivery import DeliveryEnvironment
 from packages.contracts.manifest import Slug
 from packages.contracts.release import IdempotencyKey, Sha256
+from packages.contracts.runtime import JsonValue
 
 SignalName = Annotated[
     str,
@@ -50,6 +51,20 @@ class IncidentStatus(StrEnum):
     VERIFYING = "verifying"
     RESOLVED = "resolved"
     ESCALATED = "escalated"
+
+
+class EvidenceKind(StrEnum):
+    """Bounded evidence sources accepted by the incident investigator."""
+
+    METRIC = "metric"
+    TRACE = "trace"
+    SANITIZED_LOG = "sanitized_log"
+    DEPLOYMENT = "deployment"
+    CONFIG_DIFF = "config_diff"
+    EVALUATION = "evaluation"
+    KUBERNETES_EVENT = "kubernetes_event"
+    POLICY_DECISION = "policy_decision"
+    PRIOR_INCIDENT = "prior_incident"
 
 
 class IncidentSignal(BaseModel):
@@ -152,6 +167,56 @@ class IncidentResult(BaseModel):
     created: bool
     incident: Incident
     trigger: IncidentTrigger
+
+
+class EvidenceInput(BaseModel):
+    """Sanitized source item ready for content-addressed persistence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    idempotency_key: IdempotencyKey
+    kind: EvidenceKind
+    source_ref: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+    ]
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+    occurred_at: datetime
+    subject_id: str | None = Field(default=None, min_length=1, max_length=200)
+    attributes: dict[str, JsonValue] = Field(default_factory=dict, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_evidence_time(self) -> EvidenceInput:
+        if self.occurred_at.tzinfo is None or self.occurred_at.utcoffset() is None:
+            raise ValueError("Evidence timestamps must be timezone-aware")
+        return self
+
+
+class IncidentEvidence(BaseModel):
+    """Immutable incident evidence with a canonical content hash."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    incident_id: UUID
+    kind: EvidenceKind
+    source_ref: str
+    summary: str
+    occurred_at: datetime
+    subject_id: str | None = None
+    attributes: dict[str, JsonValue]
+    content_hash: Sha256
+    idempotency_key: IdempotencyKey
+    collected_by: str = Field(min_length=2, max_length=200)
+    collected_at: datetime
+
+
+class EvidenceCollectionResult(BaseModel):
+    """Idempotent result for one evidence item."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    created: bool
+    evidence: IncidentEvidence
 
 
 class IncidentDetection(BaseModel):
