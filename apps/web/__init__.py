@@ -22,3 +22,7 @@ def governance_page_path() -> Path:
 
 def delivery_page_path() -> Path:
     return Path(str(files("apps.web").joinpath("delivery.html")))
+
+
+def incident_page_path() -> Path:
+    return Path(str(files("apps.web").joinpath("incidents.html")))

@@ -27,6 +27,7 @@ from apps.web import (
     delivery_page_path,
     evaluation_page_path,
     governance_page_path,
+    incident_page_path,
     observability_page_path,
     registry_page_path,
 )
@@ -60,6 +61,17 @@ from packages.contracts.governance import (
     GovernancePolicyView,
 )
 from packages.contracts.health import HealthResponse, VersionResponse
+from packages.contracts.incident import (
+    EvidenceCollectionResult,
+    EvidenceInput,
+    Incident,
+    IncidentDetection,
+    IncidentEvidence,
+    IncidentInvestigationView,
+    IncidentTimeline,
+    IncidentTrigger,
+    ObserveIncidentSignalRequest,
+)
 from packages.contracts.manifest import AgentManifest
 from packages.contracts.observability import AgentHealth, CostAttributionReport, FleetHealth
 from packages.contracts.registry import (
@@ -99,6 +111,15 @@ from packages.governance import (
     PolicyEngine,
     agent_policy_profiles,
 )
+from packages.incidents.analysis import DeterministicIncidentAnalyzer
+from packages.incidents.evidence_repository import (
+    IncidentEvidenceRepository,
+    IncidentEvidenceStore,
+)
+from packages.incidents.repository import IncidentRepository, IncidentStore
+from packages.incidents.rollback_repository import RollbackOperationRepository
+from packages.incidents.service import IncidentService
+from packages.incidents.timeline import IncidentTimelineBuilder
 from packages.observability.conventions import Attribute
 from packages.observability.slos import fleet_health
 from packages.observability.telemetry import Telemetry, TelemetryConfig
@@ -124,6 +145,8 @@ def create_app(
     telemetry_instance: Telemetry | None = None,
     policy_engine: PolicyEngine | None = None,
     governance_audit_store: GovernanceAuditStore | None = None,
+    incident_store: IncidentStore | None = None,
+    incident_evidence_store: IncidentEvidenceStore | None = None,
 ) -> FastAPI:
     """Create an application with explicit, testable dependencies."""
     app_settings = settings or load_settings()
@@ -286,6 +309,15 @@ def create_app(
         routes = DeliveryRepository(registry_database)
     if canaries is None and registry_database is not None:
         canaries = CanaryRepository(registry_database)
+    incidents = incident_store
+    evidence = incident_evidence_store
+    rollbacks: RollbackOperationRepository | None = None
+    if incidents is None and registry_database is not None:
+        incidents = IncidentRepository(registry_database)
+    if evidence is None and registry_database is not None:
+        evidence = IncidentEvidenceRepository(registry_database)
+    if registry_database is not None:
+        rollbacks = RollbackOperationRepository(registry_database)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -317,6 +349,8 @@ def create_app(
     app.state.database = registry_database
     app.state.policy_engine = active_policy_engine
     app.state.governance_audit = active_audit_store
+    app.state.incidents = incidents
+    app.state.incident_evidence = evidence
     app.middleware("http")(correlation_middleware)
     register_error_handlers(app)
 
@@ -759,6 +793,123 @@ def create_app(
     @app.get("/delivery", response_class=FileResponse, include_in_schema=False)
     async def delivery_console() -> FileResponse:
         return FileResponse(delivery_page_path())
+
+    def require_incidents() -> IncidentStore:
+        if incidents is None:
+            raise HTTPException(status_code=503, detail="Incident store is unavailable")
+        return incidents
+
+    def require_incident_evidence() -> IncidentEvidenceStore:
+        if evidence is None:
+            raise HTTPException(status_code=503, detail="Incident evidence store is unavailable")
+        return evidence
+
+    @app.post(
+        "/incidents/signals",
+        response_model=IncidentDetection,
+        tags=["incidents"],
+    )
+    async def observe_incident_signal(
+        observation: ObserveIncidentSignalRequest,
+    ) -> IncidentDetection:
+        service = IncidentService(require_incidents())
+        return await asyncio.to_thread(service.observe, observation)
+
+    @app.get("/incidents", response_model=list[Incident], tags=["incidents"])
+    async def list_incidents(agent_name: str | None = None) -> list[Incident]:
+        return await asyncio.to_thread(require_incidents().list_incidents, agent_name)
+
+    @app.get("/incidents/{incident_id}", response_model=Incident, tags=["incidents"])
+    async def get_incident(incident_id: UUID) -> Incident:
+        return await asyncio.to_thread(require_incidents().get, incident_id)
+
+    @app.get(
+        "/incidents/{incident_id}/triggers",
+        response_model=list[IncidentTrigger],
+        tags=["incidents"],
+    )
+    async def list_incident_triggers(incident_id: UUID) -> list[IncidentTrigger]:
+        return await asyncio.to_thread(require_incidents().triggers, incident_id)
+
+    @app.post(
+        "/incidents/{incident_id}/evidence",
+        response_model=EvidenceCollectionResult,
+        tags=["incidents"],
+    )
+    async def append_incident_evidence(
+        incident_id: UUID,
+        item: EvidenceInput,
+        actor: Annotated[
+            str,
+            Header(alias="X-AgentHub-Actor", min_length=2, max_length=200),
+        ],
+    ) -> EvidenceCollectionResult:
+        return await asyncio.to_thread(require_incident_evidence().append, incident_id, item, actor)
+
+    @app.get(
+        "/incidents/{incident_id}/evidence",
+        response_model=list[IncidentEvidence],
+        tags=["incidents"],
+    )
+    async def list_incident_evidence(incident_id: UUID) -> list[IncidentEvidence]:
+        return await asyncio.to_thread(require_incident_evidence().list_evidence, incident_id)
+
+    @app.get(
+        "/incidents/{incident_id}/timeline",
+        response_model=IncidentTimeline,
+        tags=["incidents"],
+    )
+    async def incident_timeline(incident_id: UUID) -> IncidentTimeline:
+        trigger_items, evidence_items = await asyncio.gather(
+            asyncio.to_thread(require_incidents().triggers, incident_id),
+            asyncio.to_thread(require_incident_evidence().list_evidence, incident_id),
+        )
+        return IncidentTimelineBuilder().build(
+            incident_id,
+            trigger_items,
+            evidence_items,
+            generated_at=datetime.now(UTC),
+        )
+
+    @app.get(
+        "/incidents/{incident_id}/investigation",
+        response_model=IncidentInvestigationView,
+        tags=["incidents"],
+    )
+    async def incident_investigation(incident_id: UUID) -> IncidentInvestigationView:
+        incident, trigger_items, evidence_items = await asyncio.gather(
+            asyncio.to_thread(require_incidents().get, incident_id),
+            asyncio.to_thread(require_incidents().triggers, incident_id),
+            asyncio.to_thread(require_incident_evidence().list_evidence, incident_id),
+        )
+        generated_at = datetime.now(UTC)
+        timeline = IncidentTimelineBuilder().build(
+            incident_id,
+            trigger_items,
+            evidence_items,
+            generated_at=generated_at,
+        )
+        analysis = DeterministicIncidentAnalyzer().analyze(
+            incident_id,
+            timeline,
+            evidence_items,
+            generated_at=generated_at,
+        )
+        operations = (
+            await asyncio.to_thread(rollbacks.list_for_incident, incident_id)
+            if rollbacks is not None
+            else []
+        )
+        return IncidentInvestigationView(
+            incident=incident,
+            timeline=timeline,
+            analysis=analysis,
+            rollbacks=operations,
+        )
+
+    @app.get("/incidents-console", response_class=FileResponse, include_in_schema=False)
+    async def incident_console() -> FileResponse:
+        return FileResponse(incident_page_path())
 
     async def current_fleet_health() -> FleetHealth:
         summaries = await asyncio.to_thread(registry.list_agents)

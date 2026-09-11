@@ -58,6 +58,15 @@ class RollbackOperationRepository:
             ).scalar_one_or_none()
             return int(count), latest
 
+    def list_for_incident(self, incident_id: UUID) -> list[RollbackOperation]:
+        with self._database.transaction() as session:
+            records = session.execute(
+                select(RollbackOperationRecord)
+                .where(RollbackOperationRecord.incident_id == incident_id)
+                .order_by(RollbackOperationRecord.created_at, RollbackOperationRecord.id)
+            ).scalars()
+            return [self._view(record) for record in records]
+
     def reserve(
         self, command: RollbackCommand, decision: RollbackPolicyDecision
     ) -> RollbackReservation:

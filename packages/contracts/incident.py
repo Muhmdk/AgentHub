@@ -585,6 +585,17 @@ class CoordinatedRollbackResult(BaseModel):
     execution: RollbackExecution | None = None
 
 
+class IncidentInvestigationView(BaseModel):
+    """Operator-facing incident, evidence, analysis, and recovery state."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    incident: Incident
+    timeline: IncidentTimeline
+    analysis: DeterministicInvestigation
+    rollbacks: list[RollbackOperation]
+
+
 class IncidentDetection(BaseModel):
     """A non-breach decision or a persisted incident result."""
 
