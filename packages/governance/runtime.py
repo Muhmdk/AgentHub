@@ -31,6 +31,7 @@ from packages.contracts.runtime import (
     ToolObservation,
 )
 from packages.governance.engine import PolicyEngine, PolicyEngineUnavailable
+from packages.governance.privacy import detect_pii, redact_model_request
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,11 @@ class PolicyAuthorizer:
         self._engine = engine
         self._agent = agent
         self._environment = environment
+
+    @property
+    def external_model(self) -> bool:
+        """Whether the declared provider is outside the local process."""
+        return self._agent.model.provider != "fake"
 
     async def authorize_tool(
         self,
@@ -168,7 +174,21 @@ class AuthorizedChatModel:
         return self._target.name
 
     async def generate(self, request: ModelRequest) -> ModelResponse:
-        await self._authorizer.authorize_model(request)
+        contains_pii = any(detect_pii(message.content) for message in request.messages)
+        data_classes = [DataClass.INTERNAL]
+        if contains_pii:
+            data_classes.append(DataClass.PII)
+        decision = await self._authorizer.authorize_model(
+            request,
+            data_classes=data_classes,
+        )
+        if contains_pii and self._authorizer.external_model:
+            if not decision.obligations.redact_pii:
+                raise AgentExecutionError(
+                    AgentErrorCode.POLICY_DENIED,
+                    "External PII handling denied by policy",
+                )
+            request = redact_model_request(request)
         return await self._target.generate(request)
 
 

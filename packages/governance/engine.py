@@ -9,6 +9,7 @@ from urllib.request import Request, urlopen
 from pydantic import ValidationError
 
 from packages.contracts.governance import (
+    DataClass,
     ModelInvocationAction,
     OPAQuery,
     OPAResponse,
@@ -43,12 +44,17 @@ class LocalPolicyEngine:
             reasons = self._model_denials(policy_input, action)
         else:
             reasons = ["unsupported_action"]
+        redact_pii = (
+            isinstance(action, ModelInvocationAction)
+            and action.external_provider
+            and DataClass.PII in action.data_classes
+        )
         return PolicyDecision(
             schema_version="agenthub.dev/policy-decision/v1",
             allow=not reasons,
             reasons=reasons or [f"{action.kind}_allowed"],
             policy_bundle_version=self._VERSION,
-            obligations=PolicyObligations(audit=True),
+            obligations=PolicyObligations(audit=True, redact_pii=redact_pii),
         )
 
     @staticmethod

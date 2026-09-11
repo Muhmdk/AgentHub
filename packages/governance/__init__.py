@@ -6,6 +6,13 @@ from packages.governance.engine import (
     PolicyEngine,
     PolicyEngineUnavailable,
 )
+from packages.governance.privacy import (
+    PIIFinding,
+    PIIKind,
+    detect_pii,
+    redact_model_request,
+    redact_text,
+)
 from packages.governance.profiles import agent_policy_profiles
 from packages.governance.runtime import (
     AuthorizedChatModel,
@@ -20,10 +27,15 @@ __all__ = [
     "AuthorizedTool",
     "LocalPolicyEngine",
     "OPAHttpPolicyEngine",
+    "PIIFinding",
+    "PIIKind",
     "PolicyAuthorizer",
     "PolicyEngine",
     "PolicyEngineUnavailable",
     "RuntimePolicyContext",
     "agent_policy_profiles",
     "bind_policy_context",
+    "detect_pii",
+    "redact_model_request",
+    "redact_text",
 ]
