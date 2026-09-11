@@ -69,7 +69,7 @@ class ToolDefinition(BaseModel):
 
     name: NonEmptyString
     description: NonEmptyString
-    read_only: Literal[True] = True
+    read_only: bool = True
 
 
 class Citation(BaseModel):

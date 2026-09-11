@@ -36,6 +36,7 @@ from packages.contracts.runtime import (
     ToolDefinition,
     ToolObservation,
 )
+from packages.delivery.context import ensure_shadow_tool_access
 from packages.governance.budgets import (
     BudgetExceeded,
     BudgetKey,
@@ -459,10 +460,12 @@ class AuthorizedTool:
         self._required_scopes = required_scopes
 
     async def invoke(self, arguments: dict[str, JsonValue]) -> ToolObservation:
+        access = ToolAccess.READ if self.definition.read_only else ToolAccess.WRITE
+        ensure_shadow_tool_access(access)
         await self._authorizer.authorize_tool(
             tool_name=self.definition.name,
             required_scopes=self._required_scopes,
-            access=ToolAccess.READ,
+            access=access,
             arguments=arguments,
         )
         return await self._target.invoke(arguments)

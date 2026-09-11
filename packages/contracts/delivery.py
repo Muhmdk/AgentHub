@@ -2,13 +2,14 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from packages.contracts.manifest import SemanticVersion, Slug
 from packages.contracts.release import IdempotencyKey, Sha256
+from packages.contracts.runtime import AgentResponse
 
 BasisPoints = Annotated[int, Field(ge=0, le=10_000)]
 
@@ -25,6 +26,15 @@ class RouteLane(StrEnum):
 
     STABLE = "stable"
     CANDIDATE = "candidate"
+
+
+class ShadowStatus(StrEnum):
+    """Terminal status of an isolated candidate invocation."""
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    TIMED_OUT = "timed_out"
+    CANCELLED = "cancelled"
 
 
 class RouteTarget(BaseModel):
@@ -156,3 +166,25 @@ class RouteDecision(BaseModel):
     lane: RouteLane
     target: RouteTarget
     reason: str = Field(min_length=3, max_length=300)
+
+
+class ShadowPairRecord(BaseModel):
+    """Redacted, paired production and shadow execution evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    correlation_id: str = Field(min_length=1, max_length=200)
+    route_id: UUID
+    route_revision: int = Field(ge=1)
+    stable_release_id: UUID
+    candidate_release_id: UUID
+    request_hash: Sha256
+    request_redacted: bool
+    stable_response: AgentResponse
+    candidate_response: AgentResponse | None
+    shadow_status: ShadowStatus
+    shadow_error_code: str | None = Field(default=None, max_length=100)
+    shadow_latency_ms: float = Field(ge=0)
+    recorded_at: datetime
+    source: Literal["shadow"] = "shadow"
