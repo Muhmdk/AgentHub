@@ -67,6 +67,16 @@ class EvidenceKind(StrEnum):
     PRIOR_INCIDENT = "prior_incident"
 
 
+class FindingKind(StrEnum):
+    """Deterministic analysis techniques used to construct incident claims."""
+
+    CHANGE_CORRELATION = "change_correlation"
+    SPAN_CONTRIBUTION = "span_contribution"
+    METRIC_CO_MOVEMENT = "metric_co_movement"
+    KNOWN_SIGNATURE = "known_signature"
+    COUNTER_EVIDENCE = "counter_evidence"
+
+
 class IncidentSignal(BaseModel):
     """Sanitized operational measurement evaluated by deterministic rules."""
 
@@ -248,6 +258,40 @@ class IncidentTimeline(BaseModel):
     missing_sources: list[EvidenceKind]
     warnings: list[str]
     clock_skew_detected: bool
+
+
+class EvidenceCitation(BaseModel):
+    """Immutable source pointer required on every investigator claim."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evidence_id: UUID
+    source_ref: str = Field(min_length=1, max_length=500)
+    content_hash: Sha256
+
+
+class InvestigationClaim(BaseModel):
+    """One bounded deterministic claim grounded in stored evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: FindingKind
+    statement: str = Field(min_length=3, max_length=500)
+    confidence: float = Field(ge=0, le=1)
+    citations: list[EvidenceCitation] = Field(min_length=1, max_length=20)
+
+
+class DeterministicInvestigation(BaseModel):
+    """Heuristic findings and counter-evidence without generated inference."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    incident_id: UUID
+    generated_at: datetime
+    probable_cause: InvestigationClaim | None = None
+    findings: list[InvestigationClaim]
+    counter_evidence: list[InvestigationClaim]
+    missing_evidence: list[EvidenceKind]
 
 
 class IncidentDetection(BaseModel):

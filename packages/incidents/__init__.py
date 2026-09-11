@@ -1,5 +1,6 @@
 """Deterministic operational incident detection and persistence."""
 
+from packages.incidents.analysis import DeterministicIncidentAnalyzer
 from packages.incidents.detection import IncidentTriggerDetector
 from packages.incidents.evidence import (
     ConfigEvidenceAdapter,
@@ -23,6 +24,7 @@ from packages.incidents.timeline import IncidentTimelineBuilder
 
 __all__ = [
     "ConfigEvidenceAdapter",
+    "DeterministicIncidentAnalyzer",
     "EvidenceConflictError",
     "IncidentConflictError",
     "IncidentEvidenceRepository",
