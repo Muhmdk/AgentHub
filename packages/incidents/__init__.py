@@ -23,6 +23,11 @@ from packages.incidents.repository import (
     IncidentRepository,
     IncidentStore,
 )
+from packages.incidents.rollback import (
+    KnownGoodRollbackExecutor,
+    KnownGoodRollbackPlanner,
+    RollbackValidationError,
+)
 from packages.incidents.service import IncidentService
 from packages.incidents.sources import IncidentSignalFactory
 from packages.incidents.timeline import IncidentTimelineBuilder
@@ -43,7 +48,10 @@ __all__ = [
     "IncidentTimelineBuilder",
     "IncidentTriggerDetector",
     "InvestigatorOutputError",
+    "KnownGoodRollbackExecutor",
+    "KnownGoodRollbackPlanner",
     "LangGraphIncidentInvestigator",
     "ReleaseEvidenceAdapter",
+    "RollbackValidationError",
     "TelemetryEvidenceAdapter",
 ]

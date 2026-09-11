@@ -7,7 +7,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from packages.contracts.delivery import DeliveryEnvironment
+from packages.contracts.delivery import (
+    CanaryRollout,
+    DeliveryEnvironment,
+    TrafficAllocation,
+    TrafficRoute,
+)
 from packages.contracts.manifest import Slug
 from packages.contracts.release import IdempotencyKey, Sha256
 from packages.contracts.runtime import JsonValue
@@ -364,6 +369,56 @@ class IncidentInvestigationReport(BaseModel):
     missing_evidence: list[EvidenceKind]
     generated_by: str = Field(min_length=2, max_length=200)
     generated_at: datetime
+
+
+class PrepareRollbackRequest(BaseModel):
+    """Operator or automation request for one immutable known-good target."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    idempotency_key: IdempotencyKey
+    incident_id: UUID
+    route_id: UUID
+    expected_route_revision: int = Field(ge=1)
+    canary_rollout_id: UUID | None = None
+    expected_canary_revision: int | None = Field(default=None, ge=1)
+    target_release_id: UUID
+    target_provenance_hash: Sha256
+    actor: str = Field(min_length=2, max_length=200)
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
+    requested_at: datetime
+
+    @model_validator(mode="after")
+    def validate_rollback_revisions(self) -> PrepareRollbackRequest:
+        if (self.canary_rollout_id is None) != (self.expected_canary_revision is None):
+            raise ValueError("Canary rollback identity and revision must be provided together")
+        if self.requested_at.tzinfo is None or self.requested_at.utcoffset() is None:
+            raise ValueError("Rollback request timestamps must be timezone-aware")
+        return self
+
+
+class RollbackCommand(BaseModel):
+    """Validated control-plane command with no generated actuation surface."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    command_hash: Sha256
+    request: PrepareRollbackRequest
+    agent_name: Slug
+    environment: DeliveryEnvironment
+    previous_allocation: TrafficAllocation
+    target_allocation: TrafficAllocation
+
+
+class RollbackExecution(BaseModel):
+    """Audited route and optional canary result after command execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    command: RollbackCommand
+    route: TrafficRoute
+    canary: CanaryRollout | None = None
+    executed_at: datetime
 
 
 class IncidentDetection(BaseModel):
