@@ -30,6 +30,10 @@ jobs:
         run: make lint
       - name: Check types
         run: make typecheck
+      - name: Smoke-test documentation and a clean wheel install
+        run: |
+          make docs-check
+          make clean-install
       - name: Scan tracked files and dependencies
         run: make security
 

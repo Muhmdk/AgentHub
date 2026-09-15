@@ -9,7 +9,7 @@ OPA ?= opa
 HELM_CHART := deploy/helm/agenthub
 HELM_CI_VALUES := tests/fixtures/helm/values-ci.yaml
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security policy infra-terraform infra-helm infra-validate smoke-deployment measure-load up observability-up observability-down migrate seed-registry run demo demo-setup demo-reset demo-inventory demo-knowledge demo-shopping demo-incident-fault ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e docs-check clean-install security policy infra-terraform infra-helm infra-validate smoke-deployment measure-load up observability-up observability-down migrate seed-registry run demo demo-setup demo-reset demo-inventory demo-knowledge demo-shopping demo-incident-fault ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -44,6 +44,12 @@ test-integration:
 
 test-e2e:
 	$(BIN)/pytest -m e2e --no-cov
+
+docs-check:
+	$(BIN)/python scripts/check_docs.py
+
+clean-install:
+	$(BIN)/python scripts/verify_clean_install.py
 
 security:
 	git ls-files -z | xargs -0 $(BIN)/detect-secrets-hook --baseline .secrets.baseline
