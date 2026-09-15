@@ -55,7 +55,7 @@ an active cooldown, an exhausted attempt limit, or a concurrent rollout.
 
 ## Request a known-good rollback
 
-The incident console's **Approve / request known-good rollback** action uses the incident revision
+The incident console's **Request policy-checked known-good rollback** action uses the incident revision
 currently on screen. The equivalent API request contains operator intent only:
 
 ```bash

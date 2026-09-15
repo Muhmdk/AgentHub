@@ -4,6 +4,25 @@ Use this runbook when candidate evaluation, scanning, attestation, approval, or 
 Do not rebuild an image to recover a partially completed release. Recovery always refers to the
 original digest and candidate release ID.
 
+## Evaluation failure
+
+Read the immutable report and comparison before changing source:
+
+```console
+.venv/bin/python -m packages.evaluation --replay-run-id RUN_ID
+curl --fail-with-body http://127.0.0.1:8000/evaluations/runs/RUN_ID/comparison
+```
+
+Separate an incomplete case (`timeout` or `error`) from a completed metric failure. Missing
+critical metrics fail closed. Reproduce against the same committed dataset, suite, evaluator,
+gate profile, manifest hash, and provider settings recorded by the run. Do not edit the stored
+report, relax a gate during triage, or promote a different artifact under the same version.
+
+Fix the agent, versioned evaluation input, or bounded dependency, then register a new immutable
+agent version when executable behavior changed and create a new evaluation run. A known-bad
+local control is available as `make evaluate-bad`; its exit code `2` is expected evidence that
+the gate blocked release.
+
 ## Triage
 
 1. Open the failed GitHub Actions run and record its run ID, source SHA, image digest, candidate
