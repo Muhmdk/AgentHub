@@ -1,384 +1,218 @@
 # AgentHub
 
-AgentHub is an enterprise AgentOps and ModelOps control plane for registering,
-evaluating, deploying, observing, governing, and operating AI agents. The project
-is being delivered in twelve independently reviewable phases described in
-[AGENTHUB_PLAN.md](AGENTHUB_PLAN.md).
+AgentHub is a local-first AgentOps and ModelOps control plane for registering,
+evaluating, governing, releasing, observing, investigating, and safely rolling back AI
+agents. Three deliberately small retail agents exercise the platform; the lifecycle around
+them is the product.
 
-## Current status
+Phase 11 is the `v1.0.0` release candidate. The version tag is created only after this phase
+merges and the final `main` verification is green.
 
-Phases 00 through 10 provide the local development foundation, three bounded demonstration
-agents, an immutable registry, reproducible evaluations, an observability/SLO plane, and an
-immutable CI/CD release path with an authenticated governance gateway, progressive delivery, and
-evidence-grounded incident recovery.
-The repository currently includes:
+![AgentHub progressive delivery console](docs/images/progressive-delivery.png)
 
-- FastAPI liveness, readiness, and version endpoints;
-- typed environment configuration with safe local defaults;
-- JSON application and access logs with correlation IDs;
-- consistent, non-sensitive API error envelopes;
-- a deterministic fake model behind a provider-neutral interface;
-- a bounded LangGraph Inventory Agent with four typed, read-only retail tools;
-- a deterministic, versioned local retrieval pipeline with idempotent ingestion;
-- grounded Knowledge and Shopping Agents with citations, abstention, and retrieval traces;
-- a versioned six-query retrieval benchmark and prompt-injection defenses;
-- a PostgreSQL registry for immutable agent versions and lifecycle state;
-- idempotent manifest registration, optimistic concurrency, and append-only audits;
-- registry APIs and a small operator inventory view backed by persisted data;
-- versioned evaluation datasets, suites, evaluator versions, and release-gate profiles;
-- bounded case execution with timeouts, safe failures, integrity hashes, and replay;
-- deterministic quality, grounding, tool, safety, latency, token, and cost evaluators;
-- immutable PostgreSQL evaluation artifacts with absolute and relative gate reasons;
-- evaluation APIs, JSON/JUnit CLI output, and an operator comparison view;
-- privacy-safe OpenTelemetry traces with W3C propagation and release correlation;
-- bounded agent, tool, retrieval, model, evaluation, policy, token, and cost metrics;
-- versioned SLOs, error budgets, multi-window burn alerts, and incident runbooks;
-- a local Collector, Prometheus, Tempo, and provisioned Grafana dashboards;
-- immutable candidate provenance and an idempotent, guarded promotion state machine;
-- split PR, candidate-evaluation, release, and infrastructure workflows;
-- non-root reproducible images, digest publication, high/critical scan gates, SBOMs, and attestations;
-- protected staging and production approvals backed by short-lived GitHub OIDC identity;
-- an authenticated AI Gateway with per-model/tool policy enforcement and explicit local identities;
-- versioned OPA/Rego rules for scopes, environments, risk approvals, models, tokens, and PII;
-- deterministic pre-provider PII redaction plus per-agent/model rate, token, and cost controls;
-- append-only sanitized governance decisions and an operator policy/audit console;
-- shadow comparison, guarded canary stages, atomic traffic routing, and cost-aware model selection;
-- typed incident triggers with content-addressed evidence and normalized timelines;
-- deterministic correlation plus a citation-validated, read-only LangGraph investigator;
-- policy-bound, idempotent known-good rollback with cooldowns and bounded attempts;
-- fixed-window recovery verification, failed-recovery escalation, and an incident console;
-- synthetic store, SKU, inventory, sales, promotion, and weather evidence;
-- unit, contract, and process-level smoke tests;
-- linting, formatting, strict typing, coverage, secret scanning, and dependency auditing;
-- least-privilege, SHA-pinned GitHub Actions workflows.
+## Run the complete local demo
 
-## Prerequisites
+Prerequisites: Python 3.14, Docker with Compose, GNU Make, and Git. From a clean clone:
 
-- Python 3.14
-- GNU Make
-- Git
-- Docker with Compose
-
-No cloud account, provider credential, or model API key is needed. Phase 03 uses the documented
-local PostgreSQL container; host port `5433` avoids the common default PostgreSQL port.
-
-## Inventory Agent demo
-
-Run the deterministic reference question:
-
-```bash
-make demo-inventory
+```console
+make demo
 ```
 
-The command answers “Which Toronto stores may run low on snow shovels this weekend?” using
-only committed synthetic evidence. It reports Queen Street as at risk and York Mills as not
-currently at risk, followed by the four tool calls, their source IDs, citations, and normalized
-fake-model usage. See the [Inventory Agent walkthrough](docs/demos/inventory-agent.md) for the
-calculation, limitations, API example, and alternate CLI inputs.
+That one command creates the locked virtual environment, starts PostgreSQL, Tempo,
+Prometheus, Grafana, and the OpenTelemetry Collector, applies every migration, safely seeds
+the deterministic scenario, enables local telemetry export, and serves AgentHub at
+<http://127.0.0.1:8000>. No Azure account, provider credential, model API key, or manual SQL
+is required.
 
-## RAG agent demos
+Open the [10–15 minute final walkthrough](docs/demos/final-walkthrough.md), or start with:
 
-Validate and ingest the committed corpus, run both grounded agents, and measure retrieval:
+- registry: <http://127.0.0.1:8000/registry>
+- evaluation gates: <http://127.0.0.1:8000/evaluations>
+- governance audit: <http://127.0.0.1:8000/governance>
+- measured fleet health: <http://127.0.0.1:8000/observability>
+- progressive delivery: <http://127.0.0.1:8000/delivery>
+- incident recovery: <http://127.0.0.1:8000/incidents-console>
+- OpenAPI: <http://127.0.0.1:8000/docs>
+- Grafana: <http://127.0.0.1:3000>
 
-```bash
-make ingest-corpus
-make demo-knowledge
-make demo-shopping
-make benchmark-rag
-```
+Stop the foreground API with Ctrl-C, then run `make observability-down` and `make down`.
+`make demo-reset` safely restores the initial story without dropping the database, schema,
+migration record, or Docker volume.
 
-The Knowledge Agent answers a returns-policy question. The Shopping Agent recommends a snow
-shovel under a stated budget using only `product.search`. Both return document citations and a
-retrieval trace. The benchmark currently finds all six expected documents in its top-three
-results. See the [RAG agent walkthrough](docs/demos/rag-agents.md) for HTTP examples, corpus
-provenance, safety behavior, and limitations.
+> **Cost warning:** `make demo` uses synthetic data and deterministic local providers, so it
+> makes no paid model or Azure calls. The Azure implementation is reference infrastructure.
+> Applying its Terraform or Helm procedures is an explicit operator action and can create
+> billable Azure resources; review the [cost and teardown guidance](docs/azure/architecture-and-cost.md)
+> first.
 
-## Quick start
-
-From a clean clone:
-
-```bash
-make setup
-make up
-make migrate
-make seed-registry
-make test
-make run
-```
-
-`make setup` creates `.venv`, installs the pinned `uv` bootstrap tool, and installs the
-cross-platform dependency set from `uv.lock`. The API then listens on
-`http://127.0.0.1:8000`. In a second terminal, verify it:
-
-```bash
-curl -s http://127.0.0.1:8000/health/live
-curl -s http://127.0.0.1:8000/health/ready
-curl -s http://127.0.0.1:8000/version
-```
-
-Expected responses:
-
-```json
-{"status":"ok","service":"agenthub-api"}
-{"status":"ready","service":"agenthub-api"}
-{"service":"agenthub-api","version":"0.3.0","environment":"local"}
-```
-
-Stop the foreground server with `Ctrl-C`. Interactive API documentation is available at
-`http://127.0.0.1:8000/docs` while the service is running. The registry console is available at
-`http://127.0.0.1:8000/registry`; evaluation comparison is at
-`http://127.0.0.1:8000/evaluations`; fleet health is at
-`http://127.0.0.1:8000/observability`; governance policy and audit history are at
-`http://127.0.0.1:8000/governance`; progressive delivery is at
-`http://127.0.0.1:8000/delivery`; incident investigation and recovery are at
-`http://127.0.0.1:8000/incidents-console`. Run `make down` when local services are no longer needed.
-
-For local traces, metrics, dashboards, SLOs, alerts, and runbooks, see the
-[observability guide](docs/observability.md).
-
-## Azure development environment
-
-Phase 07 adds validated Terraform for the remote-state and dev boundaries, a restricted Helm
-chart for AKS, workload-identity adapters for Azure OpenAI, AI Search, PostgreSQL, and Azure
-Monitor, plus one smoke suite that runs locally or through a port-forwarded ClusterIP Service.
-No Azure resource is provisioned by CI or by repository setup commands.
-
-Start with the [Azure deployment runbook](docs/runbooks/azure-deploy.md), then use the dedicated
-[verification](docs/runbooks/azure-verify.md),
-[troubleshooting](docs/runbooks/azure-troubleshoot.md),
-[cost-control](docs/runbooks/azure-cost-control.md), and
-[teardown](docs/runbooks/azure-teardown.md) procedures.
-
-## Evaluation and release gates
-
-Run the default Inventory Agent suite and print its immutable JSON report:
-
-```bash
-make evaluate
-```
-
-The command exits `0` when execution completes and every gate passes. A deterministic known-bad
-candidate demonstrates release blocking and exits `2`:
-
-```bash
-make evaluate-bad
-```
-
-Use `python -m packages.evaluation --help` to select another agent, emit JUnit, compare against a
-stored baseline, or replay an existing run by UUID. The [evaluation guide](docs/evaluations.md)
-documents metrics, thresholds, artifacts, APIs, replay, and model-judge limits.
-
-Run the complete local candidate path with PostgreSQL running:
-
-```bash
-make simulate-release
-make simulate-release-bad  # intentionally exits 2 before approval
-```
-
-The passing path registers the manifest, evaluates the candidate, attaches deterministic
-security, policy, SBOM, and build evidence, then advances the same immutable release through
-`evaluated → approved → staged → production`. The blocked path persists its failed evidence but
-cannot leave `evaluated`. See the [release pipeline guide](docs/releases.md) and
-[failed-workflow recovery runbook](docs/runbooks/release-recovery.md).
-
-## API contracts
-
-| Endpoint | Purpose | Success status |
-|---|---|---:|
-| `GET /health/live` | Confirms the process can serve requests | `200` |
-| `GET /health/ready` | Confirms current process dependencies are ready | `200` |
-| `GET /version` | Reports service, build version, and environment | `200` |
-| `POST /gateway/agents/{name}/invoke` | Authenticates and invokes an agent through the governed data plane | `200` |
-| `POST /agents/inventory/invoke` | Local/test-only compatibility route for Inventory Agent | `200` |
-| `POST /agents/knowledge/invoke` | Local/test-only compatibility route for Knowledge Agent | `200` |
-| `POST /agents/shopping/invoke` | Local/test-only compatibility route for Shopping Agent | `200` |
-| `POST /registry/agents` | Idempotently registers an immutable manifest | `200` |
-| `GET /registry/agents` | Lists persisted agent identities and current state | `200` |
-| `GET /registry/agents/{name}` | Gets one agent summary | `200` |
-| `GET /registry/agents/{name}/versions` | Lists immutable version history | `200` |
-| `GET /registry/agents/{name}/versions/{version}` | Gets a complete manifest version | `200` |
-| `POST /registry/agents/{name}/versions/{version}/transitions` | Applies a legal lifecycle change | `200` |
-| `GET /registry/agents/{name}/versions/{version}/audit` | Lists append-only registry events | `200` |
-| `POST /evaluations/runs` | Evaluates one registered candidate with a versioned suite | `200` |
-| `GET /evaluations/runs` | Lists evaluation summaries, optionally filtered by agent | `200` |
-| `GET /evaluations/runs/{run_id}` | Replays one immutable full report | `200` |
-| `GET /evaluations/runs/{run_id}/comparison` | Gets absolute and relative gate checks | `200` |
-| `POST /releases/candidates` | Idempotently creates a candidate with immutable evidence | `200` |
-| `GET /releases` | Lists releases, optionally filtered by agent | `200` |
-| `GET /releases/{release_id}` | Gets release state, gates, and provenance | `200` |
-| `POST /releases/{release_id}/transitions` | Applies one guarded, retry-safe promotion | `200` |
-| `GET /releases/{release_id}/events` | Lists append-only state events | `200` |
-| `GET /releases/{release_id}/notes` | Generates release notes from stored provenance | `200` |
-| `GET /observability/fleet` | Reports live fleet signals, SLOs, budgets, and burn rates | `200` |
-| `GET /observability/agents/{name}` | Reports one agent's observability detail | `200` |
-| `GET /governance/policy` | Reports the safe active policy, agent grants, and budget posture | `200` |
-| `GET /governance/audit` | Lists bounded, filterable, sanitized policy and enforcement events | `200` |
-| `POST /incidents/signals` | Evaluates a typed operational signal and opens a breached incident | `200` |
-| `GET /incidents` | Lists persisted incidents, optionally filtered by agent | `200` |
-| `POST /incidents/{id}/evidence` | Appends one content-addressed evidence item | `200` |
-| `GET /incidents/{id}/investigation` | Returns timeline, cited findings, and rollback state | `200` |
-| `POST /incidents/{id}/rollback` | Evaluates policy and requests the immutable known-good path | `200` |
-
-Clients may provide `X-Correlation-ID` using letters, numbers, `.`, `_`, `:`, or `-`, up
-to 128 characters. AgentHub returns the accepted ID in the response. Missing or unsafe
-values are replaced with a generated UUID.
-
-Errors use one envelope:
-
-```json
-{
-  "error": {
-    "code": "not_found",
-    "message": "Not Found",
-    "correlation_id": "demo-request-1",
-    "details": []
-  }
-}
-```
-
-Submitted values and internal exception details are not returned in error responses.
-
-Invoke the agent over HTTP:
-
-```bash
-curl -s http://127.0.0.1:8000/agents/inventory/invoke \
-  -H 'Content-Type: application/json' \
-  -H 'X-Correlation-ID: inventory-demo-1' \
-  -d '{"query":"Which Toronto stores may run low on snow shovels this weekend?","seed":7,"as_of":"2026-09-08"}'
-```
-
-## Configuration
-
-Copy `.env.example` to `.env` only when local overrides are useful. Environment variables
-take the same names and take precedence.
-
-| Variable | Default | Allowed values or constraints |
-|---|---|---|
-| `AGENTHUB_ENVIRONMENT` | `local` | `local`, `test`, `staging`, `production` |
-| `AGENTHUB_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `AGENTHUB_API_HOST` | `127.0.0.1` | Non-empty host string |
-| `AGENTHUB_API_PORT` | `8000` | `1` through `65535` |
-| `AGENTHUB_GATEWAY_SERVICE_TOKENS` | `{}` | Secret JSON identity-to-token map; required outside local/test |
-| `AGENTHUB_POLICY_ENGINE_URL` | unset locally | Required HTTP(S) OPA decision URL when deployed |
-| `AGENTHUB_POLICY_TIMEOUT_SECONDS` | `2.0` | Greater than `0`, at most `30` |
-| `AGENTHUB_MODEL_PROVIDER` | `fake` | `fake` or `azure-openai` |
-| `AGENTHUB_MODEL_REQUESTS_PER_MINUTE` | `120` | `1` through `100000` per agent/model/process |
-| `AGENTHUB_MODEL_TOKENS_PER_MINUTE` | `100000` | `1` through `10000000` per agent/model/process |
-| `AGENTHUB_MODEL_COST_PER_HOUR_USD` | `10.0` | `0` through `100000` per agent/model/process |
-| `AGENTHUB_MODEL_TIMEOUT_SECONDS` | `10.0` | Greater than `0`, at most `120` |
-| `AGENTHUB_MODEL_MAX_ATTEMPTS` | `2` | `1` through `3` |
-| `AGENTHUB_MODEL_RETRY_BACKOFF_SECONDS` | `0.05` | `0` through `5` |
-| `AGENTHUB_RETRIEVAL_PROVIDER` | `local` | `local` or `azure-search` |
-| `AGENTHUB_AGENT_MAX_STEPS` | `3` | `1` through `20` |
-| `AGENTHUB_TOOL_TIMEOUT_SECONDS` | `1.0` | Greater than `0`, at most `30` |
-| `AGENTHUB_AGENT_TIMEOUT_SECONDS` | `5.0` | Greater than `0`, at most `120` |
-| `AGENTHUB_RAG_TOP_K` | `3` | `1` through `20` |
-| `AGENTHUB_RAG_MINIMUM_SCORE` | `0.15` | `0` through `1` |
-| `AGENTHUB_RETRIEVAL_TIMEOUT_SECONDS` | `5.0` | Greater than `0`, at most `120` |
-| `AGENTHUB_OTEL_ENABLED` | `false` | Enable bounded trace and metric export |
-| `AGENTHUB_OTEL_EXPORTER` | `otlp` | `otlp` locally or `azure-monitor` on AKS |
-| `AGENTHUB_OTEL_ENDPOINT` | `http://127.0.0.1:4318` | Collector OTLP/HTTP base URL |
-| `AGENTHUB_OTEL_EXPORT_INTERVAL_MS` | `5000` | `100` through `60000` |
-| `AGENTHUB_OTEL_MAX_QUEUE_SIZE` | `256` | `64` through `4096` |
-| `AGENTHUB_DATABASE_URL` | Local PostgreSQL on port `5433` | SQLAlchemy PostgreSQL URL |
-| `AGENTHUB_DATABASE_AUTH_MODE` | `password` | `password` or `azure-workload-identity` |
-
-Malformed configuration stops startup with the invalid field and error category. The
-submitted value is deliberately omitted so a mistaken secret cannot be echoed.
-
-## Development commands
-
-| Command | Behavior |
-|---|---|
-| `make setup` | Create the virtual environment and install locked dependencies |
-| `make format` | Apply Ruff formatting and safe lint fixes |
-| `make lint` | Verify formatting and lint rules |
-| `make typecheck` | Run strict mypy checks |
-| `make test` | Run the complete test suite with coverage |
-| `make test-unit` | Run isolated unit tests |
-| `make test-contract` | Run API contract tests |
-| `make test-integration` | Run component/process integration tests |
-| `make test-e2e` | Run the process-level readiness smoke test |
-| `make security` | Scan tracked files for secrets and audit dependencies |
-| `make infra-validate` | Validate Terraform modules, Helm profiles, schemas, and Kubernetes security |
-| `make smoke-deployment BASE_URL=...` | Run the bounded local/Azure post-deploy verification |
-| `make up` | Start and health-check the local PostgreSQL container |
-| `make observability-up` | Start PostgreSQL, Collector, Prometheus, Tempo, and Grafana |
-| `make observability-down` | Stop the observability services and leave PostgreSQL running |
-| `make migrate` | Upgrade the configured database to the latest Alembic revision |
-| `make seed-registry` | Idempotently register the three committed demo manifests |
-| `make run` | Run the API in the foreground |
-| `make demo-inventory` | Run the deterministic Inventory Agent CLI |
-| `make demo-knowledge` | Run the grounded Knowledge Agent CLI |
-| `make demo-shopping` | Run the grounded Shopping Agent CLI |
-| `make demo-incident-fault` | Print the deterministic top-k 5→50 incident drill payload |
-| `make ingest-corpus` | Validate ingestion and verify unchanged chunks are not duplicated |
-| `make benchmark-rag` | Print the versioned known-answer retrieval report |
-| `make evaluate` | Evaluate the Inventory Agent and emit an immutable JSON report |
-| `make evaluate-bad` | Prove a known-bad candidate is blocked with metric-level reasons |
-| `make simulate-release` | Run the passing candidate-to-production path locally |
-| `make simulate-release-bad` | Prove a regressed candidate cannot be promoted |
-| `make down` | Stop the local PostgreSQL container without deleting its volume |
-
-Run `make lock` after deliberately changing dependencies in `pyproject.toml`, then commit
-the resulting `uv.lock` change with the dependency change.
-
-## Architecture principles
-
-- Start as a modular monolith and extract services only from measured operational needs.
-- Keep domain contracts under `packages/`; application entry points compose them under
-  `apps/`.
-- Keep local development deterministic and independent of cloud credentials or paid calls.
-- Add only the directories and dependencies owned by the active phase.
-- Put volatile provider integrations behind narrow adapters when a phase has real consumers.
-- Treat configuration, logs, and errors as security boundaries: validate early and do not
-  expose secrets, submitted values, raw prompts, or PII by default.
-- Keep `main` runnable and make each change independently understandable and tested.
-
-The architectural decision and its tradeoffs are recorded in
-[ADR 0001](docs/adr/0001-modular-monolith.md) and
-[ADR 0002](docs/adr/0002-provider-neutral-agent-runtime.md). The local retrieval decision is
-recorded in [ADR 0003](docs/adr/0003-deterministic-local-retrieval.md), and registry persistence
-in [ADR 0004](docs/adr/0004-postgresql-immutable-registry.md). Evaluation and release-gate
-determinism is recorded in [ADR 0005](docs/adr/0005-deterministic-evaluation-gates.md).
-
-The [governance guide](docs/governance.md) documents the gateway, decision contract, runtime
-controls, append-only audit schema, failure behavior, and emergency recovery boundary.
-The [incident recovery runbook](docs/runbooks/incident-recovery.md) documents evidence standards,
-automatic and manual rollback boundaries, fixed-window verification, and escalation.
-
-## Repository layout
+## The lifecycle
 
 ```text
-apps/api/                  FastAPI composition root and transport behavior
-apps/web/                  Registry and evaluation operator views backed by API calls
-packages/contracts/        Shared runtime, retrieval, evaluation, health, and error schemas
-packages/registry/         PostgreSQL repository, lifecycle, bootstrap, and records
-packages/evaluation/       Runner, evaluators, gates, persistence, service, and CLI
-packages/release/          Candidate provenance, guarded state, persistence, service, and CLI
-packages/governance/       Policy engines, runtime authorization, redaction, budgets, and audit
-agents/shared/             Provider-neutral model, retrieval, corpus, and benchmark code
-agents/inventory/          Bounded graph, CLI, and read-only retail tools
-agents/knowledge/          Grounded policy-question agent and CLI
-agents/shopping/           Grounded recommendation agent, product tool, and CLI
-data/synthetic/            Versioned fictional retail evidence
-data/evals/                Versioned datasets, suites, gates, and retrieval fixtures
-data/manifests/            Versioned manifests for the three demonstration agents
-policies/                  Versioned OPA/Rego bundle and offline decision tests
-migrations/                Alembic environment and transactional schema revisions
-schemas/                   Published Agent Manifest JSON Schema
-tests/unit/                Configuration and logging behavior
-tests/contract/            HTTP response contracts
-tests/integration/         PostgreSQL repository, migration, API, and concurrency checks
-tests/e2e/                 Real server-process smoke test
-docs/adr/                  Accepted architectural decisions
-docs/demos/                Reproducible operator demonstrations
+immutable manifest → deterministic evaluation gates → policy-authorized gateway
+                  → shadow comparison → guarded canary → measured SLOs and traces
+                  → evidence-cited incident → known-good rollback → recovery verification
 ```
 
-Manifest fields, legal lifecycle transitions, audit guarantees, and API examples are documented
-in the [registry guide](docs/registry/manifests-and-lifecycle.md). See
-[CONTRIBUTING.md](CONTRIBUTING.md) before making changes.
+The seeded scenario demonstrates:
 
-## License
+- three immutable agent manifests and append-only lifecycle histories;
+- a passing baseline and known-bad candidate blocked with metric-level reasons;
+- fail-closed denial of an undeclared `admin.delete` tool call;
+- privacy-safe OpenTelemetry traces, SLOs, error budgets, token use, and cost attribution;
+- stable/shadow routing and a five-percent canary backed by 100 paired samples;
+- a controlled retrieval `top_k: 5 → 50` regression with content-addressed evidence;
+- a deterministic investigator whose claims cite stored sources and state uncertainty; and
+- policy-bound, idempotent rollback with bounded attempts and fixed-window recovery checks.
 
-AgentHub is available under the [MIT License](LICENSE).
+| Evaluation gate | Runtime governance |
+|---|---|
+| ![A known-bad evaluation is blocked](docs/images/evaluation-gates.png) | ![An undeclared tool is denied](docs/images/governance-deny.png) |
+
+| Measured observability | Incident investigation |
+|---|---|
+| ![Measured local SLOs and traces](docs/images/observability-slo.png) | ![Source-cited incident evidence](docs/images/incident-investigation.png) |
+
+## What is implemented
+
+- FastAPI control plane and authenticated AI Gateway with consistent safe errors.
+- Inventory, Knowledge, and Shopping LangGraph agents behind a provider-neutral interface.
+- Deterministic fake-model, local retrieval, synthetic corpus, citations, and abstention.
+- PostgreSQL persistence for manifests, evaluations, releases, policy audits, routes,
+  canaries, incidents, evidence, rollback operations, and append-only events.
+- Versioned absolute and baseline-relative evaluation gates with JSON and JUnit output.
+- Local and OPA policy engines, scoped tool/model authorization, PII redaction, retries,
+  rate/token/cost budgets, and sanitized auditing.
+- Immutable candidate provenance, guarded promotion, shadow comparison, atomic weighted
+  routing, cost-aware selection, and rollback to an existing known-good release.
+- OpenTelemetry traces and metrics with local Collector, Prometheus, Tempo, Grafana,
+  versioned dashboards, SLOs, burn alerts, and runbooks.
+- Azure provider adapters, Terraform modules, a restricted Helm chart, workload identity,
+  post-deploy smoke tests, and GitHub Actions release/infrastructure workflows.
+- Deterministic unit, contract, integration, end-to-end, policy, security, infrastructure,
+  accessibility, load, failure-injection, and migration checks.
+
+## Boundaries and limitations
+
+All committed retail inputs, evaluation outputs, release attestations, shadow comparisons,
+and incident signals are synthetic fixtures. Console values are either persisted fixture
+evidence, measured by the running process, or explicitly labelled projections. They are not
+claims about customer traffic, external scans, provider bills, or production outages.
+
+AgentHub is not a model-training system, no-code agent builder, marketplace, billing system,
+or production-scale multi-tenant service. It does not include real customer data, payment
+flows, destructive demo tools, automatic database failover, a service mesh, or multi-cloud
+parity. The Azure target is reproducible reference architecture; subscription policy,
+production identity roles, protected GitHub environments, DNS/TLS, backups, capacity, and
+independent approvals remain operator responsibilities.
+
+Residual risks and deployment assumptions are explicit in the
+[threat model](docs/security/threat-model.md) and
+[performance and resilience report](docs/performance-and-resilience.md).
+
+## Architecture and documentation
+
+AgentHub is a modular monolith: transport is composed under `apps/`, domain contracts and
+services live under `packages/`, and agent graphs live under `agents/`. Volatile model,
+retrieval, telemetry, policy, identity, and deployment dependencies sit behind narrow
+adapters. The data plane keeps model/tool execution behind the gateway; the control plane
+persists immutable inputs and auditable state transitions.
+
+- [Architecture and lifecycle diagrams](docs/architecture.md)
+- [API reference](docs/api.md)
+- [ADR index](docs/adr/README.md)
+- [Agent and evaluation examples](docs/examples/README.md)
+- [Operator runbook index](docs/runbooks/README.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Manifest and lifecycle contract](docs/registry/manifests-and-lifecycle.md)
+- [Evaluation gates](docs/evaluations.md)
+- [Governance boundary](docs/governance.md)
+- [Release and delivery model](docs/releases.md)
+- [Observability and SLOs](docs/observability.md)
+- [Accessibility evidence](docs/accessibility.md)
+
+The design decisions prioritize deterministic local development, immutable evidence,
+fail-closed controls, atomic route changes, and measurable extraction thresholds over
+speculative distributed infrastructure.
+
+## API surface
+
+The complete request/response contracts are in [docs/api.md](docs/api.md). Primary routes:
+
+| Area | Routes |
+|---|---|
+| Health | `GET /health/live`, `/health/ready`, `/version` |
+| Gateway | `POST /gateway/agents/{agent_name}/invoke` |
+| Registry | `POST /registry/agents`; `GET /registry/agents/...` |
+| Evaluations | `POST /evaluations/runs`; `GET /evaluations/runs/...` |
+| Releases | `POST /releases/candidates`; `GET/POST /releases/...` |
+| Observability | `GET /observability/fleet`, `/observability/agents/{name}` |
+| Governance | `GET /governance/policy`, `/governance/audit` |
+| Delivery | `GET/POST /delivery/routes/...`, `/delivery/canaries/...` |
+| Incidents | `POST /incidents/signals`; `GET/POST /incidents/...` |
+
+Local/test compatibility routes under `/agents/...` remain intentionally unavailable in
+staging and production. Staging and production control-plane routes require configured
+service-token authentication; ingress/network policy is still part of the deployment boundary.
+
+## Development
+
+Run the complete local quality suite:
+
+```console
+make setup
+make lint
+make typecheck
+make test
+make security
+make policy
+make infra-validate
+```
+
+Useful targets:
+
+| Command | Purpose |
+|---|---|
+| `make demo` | One-command local stack, reset, seed, telemetry, and API |
+| `make demo-reset` | Recreate only the allowlisted deterministic demo state |
+| `make test-unit` | Isolated domain and configuration tests |
+| `make test-contract` | HTTP and published schema contracts |
+| `make test-integration` | PostgreSQL and component integration tests |
+| `make test-e2e` | Process and full release/incident/rollback journeys |
+| `make measure-load BASE_URL=...` | Bounded measured gateway/control-plane baseline |
+| `make security` | Secret and dependency vulnerability checks |
+| `make policy` | Format, validate, and test Rego policies |
+| `make infra-validate` | Terraform, Helm, schema, and Kubernetes security checks |
+| `make smoke-deployment BASE_URL=...` | Bounded post-deployment verification |
+| `make up` / `make down` | Start or stop local PostgreSQL without deleting its volume |
+
+Configuration uses `AGENTHUB_`-prefixed environment variables. Safe local defaults use the
+fake model, local retrieval, localhost PostgreSQL on port 5433, five pooled connections with
+ten overflow slots and a five-second pool timeout, bounded model/tool/agent timeouts, and a
+ten-second shutdown budget. Copy [.env.example](.env.example) only when overrides are useful;
+malformed values stop startup without echoing submitted secrets.
+
+## Repository map
+
+```text
+apps/api/                  FastAPI composition and transport behavior
+apps/web/                  Six dependency-free operator consoles
+packages/contracts/        Shared API and domain schemas
+packages/registry/         Database, migrations, manifests, lifecycle, audit
+packages/evaluation/       Runner, evaluators, gates, reports, persistence
+packages/release/          Candidate provenance and guarded promotion
+packages/governance/       Authorization, redaction, budgets, policy audit
+packages/delivery/         Routes, shadow evidence, canaries, cost selection
+packages/incidents/        Detection, evidence, investigation, rollback, recovery
+packages/observability/    Telemetry, SLOs, alerts, and load runner
+agents/                    Three bounded agent graphs and provider adapters
+data/                      Synthetic corpus, manifests, evaluations, policies
+deploy/                    Helm chart and local observability configuration
+infra/                     Validated Azure Terraform reference modules
+policies/                  Versioned OPA/Rego bundle and tests
+scripts/                   Demo, smoke, load, validation, and operations entrypoints
+tests/                     Unit, contract, integration, end-to-end, and fixtures
+docs/                      Architecture, ADRs, guides, runbooks, demos, evidence
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before changing dependencies, contracts, or generated
+artifacts. AgentHub is available under the [MIT License](LICENSE).

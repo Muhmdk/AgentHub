@@ -12,10 +12,11 @@ Install Docker and Python 3.14, then run:
 make demo
 ```
 
-That one command creates the locked virtual environment, starts PostgreSQL, applies
-all migrations, safely resets known AgentHub application tables, seeds the walkthrough,
-and starts the API at <http://127.0.0.1:8000>. Stop the API with Ctrl-C; stop PostgreSQL
-later with `make down`.
+That one command creates the locked virtual environment; starts PostgreSQL, Collector,
+Tempo, Prometheus, and Grafana; applies all migrations; safely resets known AgentHub
+application tables; seeds the walkthrough; enables local OTLP export; and starts the API
+at <http://127.0.0.1:8000>. Stop the API with Ctrl-C; stop the observability services with
+`make observability-down`, then PostgreSQL with `make down`.
 
 If dependencies are already installed and the API is running in another terminal,
 recreate the exact walkthrough state with:

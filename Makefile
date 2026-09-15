@@ -92,7 +92,7 @@ up:
 	docker compose up --detach --wait postgres
 
 observability-up:
-	docker compose up --detach postgres tempo otel-collector prometheus grafana
+	docker compose up --detach --wait postgres tempo otel-collector prometheus grafana
 
 observability-down:
 	docker compose stop grafana prometheus otel-collector tempo
@@ -107,9 +107,9 @@ run:
 	$(BIN)/python -m apps.api
 
 demo: demo-setup
-	$(BIN)/python -m apps.api
+	AGENTHUB_OTEL_ENABLED=true AGENTHUB_OTEL_EXPORTER=otlp AGENTHUB_OTEL_ENDPOINT=http://127.0.0.1:4318 $(BIN)/python -m apps.api
 
-demo-setup: setup up migrate
+demo-setup: setup observability-up migrate
 	$(BIN)/python -m scripts.seed_demo --reset
 
 demo-reset: migrate
