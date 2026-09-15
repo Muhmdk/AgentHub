@@ -9,7 +9,7 @@ OPA ?= opa
 HELM_CHART := deploy/helm/agenthub
 HELM_CI_VALUES := tests/fixtures/helm/values-ci.yaml
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security policy infra-terraform infra-helm infra-validate smoke-deployment measure-load up observability-up observability-down migrate seed-registry run demo-inventory demo-knowledge demo-shopping demo-incident-fault ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e security policy infra-terraform infra-helm infra-validate smoke-deployment measure-load up observability-up observability-down migrate seed-registry run demo demo-setup demo-reset demo-inventory demo-knowledge demo-shopping demo-incident-fault ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -105,6 +105,15 @@ seed-registry:
 
 run:
 	$(BIN)/python -m apps.api
+
+demo: demo-setup
+	$(BIN)/python -m apps.api
+
+demo-setup: setup up migrate
+	$(BIN)/python -m scripts.seed_demo --reset
+
+demo-reset: migrate
+	$(BIN)/python -m scripts.seed_demo --reset
 
 demo-inventory:
 	$(BIN)/python -m agents.inventory
