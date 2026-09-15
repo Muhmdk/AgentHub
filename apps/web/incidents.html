@@ -7,7 +7,10 @@
     <style>
       :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #100c0b; color: #fff8f1; }
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
       body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 82% -8%, #552419 0, #100c0b 40%); }
+      .skip-link { position: fixed; left: 12px; top: 12px; z-index: 10; transform: translateY(-160%); padding: 10px 14px; border-radius: 8px; background: #fff8f1; color: #100c0b; }
+      .skip-link:focus { transform: translateY(0); }
       main { width: min(1320px, calc(100% - 36px)); margin: auto; padding: 44px 0 72px; }
       header { display: grid; grid-template-columns: 1fr minmax(280px, 450px); gap: 28px; align-items: end; }
       .eyebrow { color: #fb923c; font: 700 .72rem/1 ui-monospace, monospace; letter-spacing: .18em; }
@@ -41,26 +44,29 @@
       .warning { color: #fecaca; }
       button.action { border: 1px solid #a64b2a; border-radius: 8px; padding: 9px 12px; color: #fff7ed; background: #7c2d12; cursor: pointer; }
       button.action:hover { background: #9a3412; }
+      a:focus-visible, button:focus-visible { outline: 3px solid #fdba74; outline-offset: 3px; }
+      button:disabled { cursor: wait; opacity: .65; }
       @media (max-width: 860px) { header, .layout { grid-template-columns: 1fr; } .claims { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content" tabindex="-1">
       <header>
         <div><div class="eyebrow">AGENTHUB / RECOVERY CONTROL</div><h1>Incident investigation</h1></div>
         <p class="lede">Follow the trigger, inspect immutable evidence, review source-cited findings, and confirm whether a known-good rollback recovered production.</p>
       </header>
-      <p id="status" role="status">Loading incidents…</p>
+      <p id="status" role="status" aria-live="polite" aria-atomic="true">Loading incidents…</p>
       <div class="layout">
-        <aside class="panel">
-          <div class="panel-head"><h2>Incident queue</h2><span class="tag" id="incident-count">0</span></div>
-          <div id="incidents"></div>
+        <aside class="panel" aria-labelledby="queue-heading">
+          <div class="panel-head"><h2 id="queue-heading">Incident queue</h2><span class="tag" id="incident-count">0</span></div>
+          <div id="incidents" aria-busy="true"></div>
         </aside>
-        <div class="detail" id="detail" hidden>
+        <div class="detail" id="detail" aria-live="polite" aria-busy="false" hidden>
           <section class="panel hero">
             <div class="row"><div><h2 id="title"></h2><p id="identity" class="muted"></p></div><span class="tag" id="state"></span></div>
             <p id="cause"></p>
-            <div><button type="button" class="action" id="rollback">Approve / request known-good rollback</button></div>
+            <div><button type="button" class="action" id="rollback">Request policy-checked known-good rollback</button></div>
           </section>
           <section class="panel">
             <div class="panel-head"><h2>Source-cited findings</h2><span class="tag">deterministic</span></div>
@@ -84,11 +90,17 @@
       let selected = null;
       let selectedView = null;
 
+      function showError(error) {
+        byId("status").textContent = error instanceof Error ? error.message : "An unexpected error occurred";
+        byId("status").setAttribute("role", "alert");
+      }
+
       function incidentButton(incident) {
         const button = node("button", "", "incident");
         button.type = "button"; button.dataset.id = incident.id;
+        button.setAttribute("aria-label", `Investigate ${incident.title}, ${incident.severity}, ${incident.status}`);
         button.append(node("strong", incident.title), node("span", `${incident.severity} · ${incident.status} · ${new Date(incident.detected_at).toLocaleString()}`));
-        button.addEventListener("click", () => selectIncident(incident.id));
+        button.addEventListener("click", () => selectIncident(incident.id).catch(error => { byId("detail").setAttribute("aria-busy", "false"); showError(error); }));
         return button;
       }
 
@@ -118,6 +130,7 @@
 
       async function selectIncident(id) {
         selected = id;
+        byId("detail").setAttribute("aria-busy", "true");
         document.querySelectorAll(".incident").forEach(item => item.setAttribute("aria-current", String(item.dataset.id === id)));
         byId("status").textContent = "Loading immutable evidence and recovery state…";
         const response = await fetch(`/incidents/${id}/investigation`);
@@ -136,10 +149,12 @@
         byId("timeline").replaceChildren(...view.timeline.entries.map(timelineCard));
         byId("evidence-count").textContent = `${view.timeline.entries.length} events`;
         byId("status").textContent = `Updated ${new Date(view.timeline.generated_at).toLocaleString()} · every finding links to stored evidence`;
+        byId("status").setAttribute("role", "status"); byId("detail").setAttribute("aria-busy", "false");
       }
 
       byId("rollback").addEventListener("click", async () => {
         if (!selectedView) return;
+        const button = byId("rollback"); button.disabled = true;
         byId("status").textContent = "Evaluating persisted evidence and rollback policy…";
         try {
           const response = await fetch(`/incidents/${selectedView.incident.id}/rollback`, {
@@ -150,7 +165,8 @@
           if (!response.ok) throw new Error(result.error?.message || "Rollback policy blocked the request");
           byId("status").textContent = `Rollback ${result.operation.status}; recovery verification must still pass.`;
           await load();
-        } catch (error) { byId("status").textContent = error.message; }
+        } catch (error) { showError(error); }
+        finally { button.disabled = false; }
       });
 
       async function load() {
@@ -158,11 +174,12 @@
         if (!response.ok) throw new Error("Incident API is unavailable");
         const incidents = await response.json(); byId("incident-count").textContent = incidents.length;
         byId("incidents").replaceChildren(...(incidents.length ? incidents.map(incidentButton) : [node("p", "No operational incidents detected.", "empty")]));
+        byId("incidents").setAttribute("aria-busy", "false");
         if (incidents.length) await selectIncident(selected && incidents.some(item => item.id === selected) ? selected : incidents[0].id);
-        else byId("status").textContent = "No incidents require investigation.";
+        else { selected = null; selectedView = null; byId("detail").hidden = true; byId("status").textContent = "No incidents require investigation."; }
       }
-      load().catch(error => byId("status").textContent = error.message);
-      setInterval(() => load().catch(error => byId("status").textContent = error.message), 30000);
+      load().catch(error => { byId("incidents").setAttribute("aria-busy", "false"); byId("detail").setAttribute("aria-busy", "false"); showError(error); });
+      setInterval(() => load().catch(showError), 30000);
     </script>
   </body>
 </html>
