@@ -197,6 +197,11 @@ def test_production_headers_cannot_bypass_missing_internal_routes() -> None:
             json={"query": _QUERY},
             headers=headers,
         )
+        unauthenticated_control_plane = client.get("/governance/policy")
+        authenticated_control_plane = client.get("/governance/policy", headers=headers)
 
     assert direct.status_code == 404
     assert gateway.status_code == 200
+    assert unauthenticated_control_plane.status_code == 401
+    assert unauthenticated_control_plane.json()["error"]["code"] == "authentication_required"
+    assert authenticated_control_plane.status_code == 200

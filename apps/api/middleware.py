@@ -7,9 +7,11 @@ from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from opentelemetry.trace import SpanKind
 
 from apps.api.logging import correlation_id_context
+from apps.gateway.identity import GatewayAuthenticationError, GatewayAuthenticator
 from packages.observability.conventions import Attribute
 from packages.observability.telemetry import Telemetry
 
@@ -19,6 +21,7 @@ CORRELATION_HEADER = "X-Correlation-ID"
 RELEASE_HEADER = "X-AgentHub-Release-ID"
 TRACE_HEADER = "X-Trace-ID"
 _VALID_CORRELATION_ID = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+_PUBLIC_PATHS = {"/health/live", "/health/ready", "/version"}
 
 
 def normalize_correlation_id(candidate: str | None) -> str:
@@ -51,7 +54,12 @@ async def correlation_middleware(
         f"HTTP {request.method}", attributes, kind=SpanKind.SERVER, parent=parent
     ) as server_span:
         try:
-            response = await call_next(request)
+            authentication_failure = authenticate_control_plane(request, correlation_id)
+            response = (
+                authentication_failure
+                if authentication_failure is not None
+                else await call_next(request)
+            )
             status_code = response.status_code
             response.headers[CORRELATION_HEADER] = correlation_id
             trace_id = telemetry.trace_id()
@@ -94,3 +102,38 @@ def normalize_release_id(candidate: str | None) -> str:
     if candidate and _VALID_CORRELATION_ID.fullmatch(candidate):
         return candidate
     return "unreleased"
+
+
+def authenticate_control_plane(request: Request, correlation_id: str) -> JSONResponse | None:
+    """Require configured bearer identity for every non-public production surface."""
+    authenticator: GatewayAuthenticator | None = getattr(
+        request.app.state, "control_plane_authenticator", None
+    )
+    settings = request.app.state.settings
+    if (
+        authenticator is None
+        or settings.environment in {"local", "test"}
+        or request.url.path in _PUBLIC_PATHS
+        or request.url.path.startswith("/gateway/")
+    ):
+        return None
+    try:
+        identity = authenticator.authenticate(
+            authorization=request.headers.get("Authorization"),
+            claimed_identity=request.headers.get("X-AgentHub-Identity"),
+        )
+    except GatewayAuthenticationError:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": {
+                    "code": "authentication_required",
+                    "message": "Control-plane authentication required",
+                    "correlation_id": correlation_id,
+                    "details": [],
+                }
+            },
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    request.state.caller_identity = identity
+    return None

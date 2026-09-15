@@ -5,7 +5,7 @@ replicaCount: 1
 
 image:
   repository: agenthub
-  tag: 0.3.0-dev
+  tag: 1.0.0
   digest: ""
   pullPolicy: IfNotPresent
 
@@ -56,6 +56,7 @@ runtime:
   gatewayServiceTokensSecretKey: gateway-service-tokens # pragma: allowlist secret
   policyEngineUrl: ""
   policyTimeoutSeconds: 2.0
+  shutdownTimeoutSeconds: 10.0
 
 policy:
   enabled: false
@@ -75,6 +76,9 @@ policy:
 database:
   authMode: password
   azureTokenScope: https://ossrdbms-aad.database.windows.net/.default
+  poolSize: 5
+  maxOverflow: 10
+  poolTimeoutSeconds: 5.0
   createSecret: true
   url: postgresql+psycopg://agenthub:agenthub@postgres:5432/agenthub # pragma: allowlist secret
   existingSecret: ""
@@ -118,10 +122,10 @@ securityContext:
 
 resources:
   requests:
-    cpu: 100m
+    cpu: 250m
     memory: 256Mi
   limits:
-    cpu: 500m
+    cpu: "1"
     memory: 512Mi
 
 probes:

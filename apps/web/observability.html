@@ -12,7 +12,10 @@
         color: #edf4ff;
       }
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
       body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 12% 0%, #142b42 0, #080d18 38%); }
+      .skip-link { position: fixed; left: 12px; top: 12px; z-index: 10; transform: translateY(-160%); padding: 10px 14px; border-radius: 8px; background: #edf4ff; color: #080d18; }
+      .skip-link:focus { transform: translateY(0); }
       main { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 52px 0 72px; }
       header { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 38px; }
       .eyebrow { margin: 0 0 10px; color: #67e8f9; font: 700 .75rem/1 ui-monospace, monospace; letter-spacing: .18em; }
@@ -24,7 +27,7 @@
       .summary div { padding: 18px 20px; border-radius: 12px; }
       .summary span { display: block; color: #93a4bd; font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; }
       .summary strong { display: block; margin-top: 8px; font-size: 1.5rem; }
-      #agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 16px; }
+      #agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(310px, 100%), 1fr)); gap: 16px; }
       article { padding: 22px; border-radius: 16px; }
       article.alert { border-color: #fb7185; }
       .agent-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
@@ -36,23 +39,25 @@
       .slo span:last-child { color: #a5f3fc; font-variant-numeric: tabular-nums; }
       .severity { color: #fecdd3 !important; font-weight: 700; text-transform: uppercase; }
       a { color: #67e8f9; text-underline-offset: 4px; }
+      a:focus-visible { outline: 3px solid #67e8f9; outline-offset: 4px; }
       .empty { color: #71839c; }
       @media (max-width: 700px) { header { display: block; } .lede { margin-top: 20px; } .summary { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content" tabindex="-1">
       <header>
         <div><p class="eyebrow">AGENTHUB / OPERATIONS</p><h1>Fleet health</h1></div>
-        <p class="lede">Live service-level signals from bounded telemetry. Follow a trace when a request needs deeper investigation.</p>
+        <p class="lede">Measured in-process service-level signals from bounded telemetry. Follow a trace when a request needs deeper investigation.</p>
       </header>
-      <p id="status" role="status">Loading fleet observations…</p>
+      <p id="status" role="status" aria-live="polite" aria-atomic="true">Loading fleet observations…</p>
       <section class="summary" aria-label="Fleet summary">
         <div><span>Agents</span><strong id="agent-count">—</strong></div>
         <div><span>Active alerts</span><strong id="alert-count">—</strong></div>
         <div><span>SLO profile</span><strong id="profile">—</strong></div>
       </section>
-      <section id="agents" aria-label="Agent health"></section>
+      <section id="agents" aria-label="Agent health" aria-busy="true"></section>
     </main>
     <script>
       const status = document.querySelector("#status");
@@ -67,12 +72,19 @@
         return node;
       }
 
+      function showError(error) {
+        status.textContent = error instanceof Error ? error.message : "An unexpected error occurred";
+        status.setAttribute("role", "alert");
+        agentsNode.setAttribute("aria-busy", "false");
+      }
+
       function traceLink(traceId) {
         if (!traceId) return textElement("span", "No trace yet", "empty");
         const link = document.createElement("a");
         const query = { datasource: "Tempo", queries: [{ query: traceId, queryType: "traceql" }], range: { from: "now-1h", to: "now" } };
         link.href = `http://127.0.0.1:3000/explore?left=${encodeURIComponent(JSON.stringify(query))}`;
         link.textContent = `Trace ${traceId.slice(0, 10)}…`;
+        link.setAttribute("aria-label", `Open trace ${traceId} in Grafana`);
         link.target = "_blank";
         link.rel = "noreferrer";
         return link;
@@ -116,8 +128,10 @@
           document.querySelector("#alert-count").textContent = alerts;
           document.querySelector("#profile").textContent = `${fleet.profile_id} v${fleet.profile_version}`;
           status.textContent = `Updated ${new Date(fleet.generated_at).toLocaleString()}`;
-          fleet.agents.forEach(agent => agentsNode.append(renderAgent(agent)));
-        } catch (error) { status.textContent = error.message; }
+          status.setAttribute("role", "status");
+          agentsNode.replaceChildren(...(fleet.agents.length ? fleet.agents.map(renderAgent) : [textElement("p", "No agent telemetry has been recorded in this process window.", "empty")]));
+          agentsNode.setAttribute("aria-busy", "false");
+        } catch (error) { showError(error); }
       }
       loadFleet();
     </script>

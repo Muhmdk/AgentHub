@@ -5,7 +5,7 @@ from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Connection
+from sqlalchemy import Connection, text
 
 from packages.registry.azure_bootstrap import (
     _postgres_database_url,
@@ -44,6 +44,22 @@ def test_database_injects_a_fresh_access_token_for_each_connection() -> None:
             "https://database.example/.default",
             "https://database.example/.default",
         ]
+    finally:
+        database.dispose()
+
+
+@pytest.mark.unit
+def test_database_reports_applied_schema_revision_without_mutation() -> None:
+    database = Database("sqlite://")
+    try:
+        with database.engine.begin() as connection:
+            connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
+            connection.execute(
+                text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+                {"revision": "0010_recovery_verification"},
+            )
+
+        assert database.schema_revision() == "0010_recovery_verification"
     finally:
         database.dispose()
 
