@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from packages.observability.load import run_load
+
 ROOT = Path(__file__).parents[2]
 
 
@@ -75,6 +77,28 @@ def test_server_process_reports_readiness(running_api: str) -> None:
     assert response.status == 200
     assert response.headers["X-Correlation-ID"] == "process-smoke"
     assert body == {"status": "ready", "service": "agenthub-api"}
+
+
+@pytest.mark.integration
+@pytest.mark.e2e
+def test_server_process_handles_bounded_concurrent_health_load(running_api: str) -> None:
+    def request_health(index: int) -> int:
+        request = urllib.request.Request(
+            f"{running_api}/health/live",
+            headers={"X-Correlation-ID": f"process-load-{index}"},
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            response.read()
+            return int(response.status)
+
+    report = run_load(request_health, request_count=60, concurrency=8)
+
+    assert report.failure_count == 0
+    assert report.status_counts == {"200": 60}
+    # A generous guard catches serialization or deadlock regressions without encoding
+    # workstation-specific benchmark numbers into CI.
+    assert report.p95_latency_ms < 1_000
+    assert report.requests_per_second > 5
 
 
 @pytest.mark.integration
