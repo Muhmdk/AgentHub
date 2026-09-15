@@ -5,8 +5,8 @@ evaluating, governing, releasing, observing, investigating, and safely rolling b
 agents. Three deliberately small retail agents exercise the platform; the lifecycle around
 them is the product.
 
-Phase 11 is the `v1.0.0` release candidate. The version tag is created only after this phase
-merges and the final `main` verification is green.
+This source is AgentHub 1.0.0. Release tags are created only from a merge commit after the
+final `main` verification is green.
 
 ![AgentHub progressive delivery console](docs/images/progressive-delivery.png)
 
@@ -118,6 +118,7 @@ adapters. The data plane keeps model/tool execution behind the gateway; the cont
 persists immutable inputs and auditable state transitions.
 
 - [Architecture and lifecycle diagrams](docs/architecture.md)
+- [1.0.0 changelog](CHANGELOG.md)
 - [API reference](docs/api.md)
 - [ADR index](docs/adr/README.md)
 - [Agent and evaluation examples](docs/examples/README.md)

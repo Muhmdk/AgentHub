@@ -33,7 +33,7 @@ class FixtureTransport(JsonTransport):
             ("GET", "/health/ready"): {"status": "ready", "service": "agenthub-api"},
             ("GET", "/version"): {
                 "service": "agenthub-api",
-                "version": "0.3.0",
+                "version": "1.0.0",
                 "environment": "staging",
             },
             ("POST", "/registry/agents"): {"created": True},
@@ -69,7 +69,7 @@ def test_smoke_covers_health_registry_agents_and_evaluation() -> None:
         environment="azure-smoke",
     )
 
-    assert report.service_version == "0.3.0"
+    assert report.service_version == "1.0.0"
     assert report.environment == "staging"
     assert report.registry_created
     assert report.evaluation_gate_passed

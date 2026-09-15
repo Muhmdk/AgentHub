@@ -28,7 +28,7 @@ RUN python -m venv "${VIRTUAL_ENV}" \
 FROM ${PYTHON_RUNTIME} AS runtime
 
 ARG SOURCE_SHA=unknown
-ARG VERSION=0.3.0-dev
+ARG VERSION=1.0.0
 LABEL org.opencontainers.image.title="AgentHub" \
       org.opencontainers.image.description="AgentOps and ModelOps control plane" \
       org.opencontainers.image.source="https://github.com/Muhmdk/AgentHub" \

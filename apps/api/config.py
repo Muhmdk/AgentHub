@@ -22,7 +22,7 @@ def installed_version() -> str:
     try:
         return version("agenthub")
     except PackageNotFoundError:
-        return "0.3.0"
+        return "1.0.0"
 
 
 class Settings(BaseSettings):
