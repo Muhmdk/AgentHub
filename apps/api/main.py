@@ -9,7 +9,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
@@ -403,6 +403,10 @@ def create_app(
             telemetry=telemetry,
         )
     )
+
+    @app.get("/", response_class=RedirectResponse, include_in_schema=False)
+    async def operator_console() -> RedirectResponse:
+        return RedirectResponse(url="/registry")
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     async def liveness() -> HealthResponse:

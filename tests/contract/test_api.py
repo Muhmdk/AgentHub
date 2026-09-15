@@ -87,6 +87,14 @@ def test_service_endpoints_return_documented_contracts(
 
 
 @pytest.mark.contract
+def test_root_redirects_to_operator_console(client: TestClient) -> None:
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/registry"
+
+
+@pytest.mark.contract
 def test_readiness_reports_unavailable_database_without_internal_details() -> None:
     app = create_app(Settings(environment="test", _env_file=None), database=UnreadyDatabase())
 
