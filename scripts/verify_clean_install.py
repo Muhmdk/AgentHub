@@ -53,6 +53,8 @@ from apps.api.main import create_app
 
 assert version("agenthub")
 assert (files("apps.web") / "registry.html").is_file()
+assert (files("apps.web") / "assets" / "agenthub.css").is_file()
+assert (files("apps.web") / "assets" / "demo.js").is_file()
 assert (files("data") / "synthetic" / "corpus.json").is_file()
 assert (files("data") / "manifests" / "inventory-agent-v1.json").is_file()
 assert any(getattr(route, "path", None) == "/health/live" for route in create_app().routes)

@@ -24,7 +24,12 @@ the deterministic scenario, enables local telemetry export, and serves AgentHub 
 <http://127.0.0.1:8000>. No Azure account, provider credential, model API key, or manual SQL
 is required.
 
-Open the [10–15 minute final walkthrough](docs/demos/final-walkthrough.md), or start with:
+The root page is a portfolio walkthrough of the project. Start with the
+[guided lifecycle demo](http://127.0.0.1:8000/demo), which offers a clearly labelled
+browser simulation and a local API evidence walkthrough. The
+[operator workspace](http://127.0.0.1:8000/console) connects all six consoles.
+Read the [portfolio guide](docs/portfolio.md) or the
+[10–15 minute final walkthrough](docs/demos/final-walkthrough.md), or start with:
 
 - registry: <http://127.0.0.1:8000/registry>
 - evaluation gates: <http://127.0.0.1:8000/evaluations>

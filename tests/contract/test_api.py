@@ -87,11 +87,12 @@ def test_service_endpoints_return_documented_contracts(
 
 
 @pytest.mark.contract
-def test_root_redirects_to_operator_console(client: TestClient) -> None:
+def test_root_serves_portfolio(client: TestClient) -> None:
     response = client.get("/", follow_redirects=False)
 
-    assert response.status_code == 307
-    assert response.headers["location"] == "/registry"
+    assert response.status_code == 200
+    assert "Explore the lifecycle" in response.text
+    assert "Muhammad Khan" in response.text
 
 
 @pytest.mark.contract

@@ -9,7 +9,8 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from agents.inventory.agent import InventoryAgent
 from agents.inventory.data import RetailData
@@ -31,6 +32,7 @@ from apps.web import (
     observability_page_path,
     registry_page_path,
 )
+from apps.web.portfolio import PAGES, render_page
 from packages.contracts.delivery import (
     CanaryActionRequest,
     CanaryEvent,
@@ -404,9 +406,15 @@ def create_app(
         )
     )
 
-    @app.get("/", response_class=RedirectResponse, include_in_schema=False)
-    async def operator_console() -> RedirectResponse:
-        return RedirectResponse(url="/registry")
+    app.mount(
+        "/assets", StaticFiles(directory=registry_page_path().parent / "assets"), name="assets"
+    )
+
+    async def portfolio_page(request: Request) -> HTMLResponse:
+        return HTMLResponse(render_page(request.url.path))
+
+    for page_path in PAGES:
+        app.add_api_route(page_path, portfolio_page, methods=["GET"], include_in_schema=False)
 
     @app.get("/health/live", response_model=HealthResponse, tags=["health"])
     async def liveness() -> HealthResponse:

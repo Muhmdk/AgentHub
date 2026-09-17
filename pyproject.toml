@@ -44,7 +44,7 @@ dev = [
 include = ["agents*", "apps*", "data*", "packages*", "scripts*"]
 
 [tool.setuptools.package-data]
-"apps.web" = ["*.html"]
+"apps.web" = ["*.html", "assets/*.css", "assets/*.js"]
 "data" = [
   "evals/*.json",
   "evals/datasets/*.json",
