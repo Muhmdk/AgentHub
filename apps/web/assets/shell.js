@@ -2,7 +2,7 @@
   const root = document.documentElement;
   let saved;
   try { saved = localStorage.getItem('agenthub-theme'); } catch (_) { /* Optional preference. */ }
-  root.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  root.dataset.theme = saved === 'dark' ? 'dark' : 'light';
   const routes = [
     ['/registry', 'Registry', 'Inspect the registered version and owner before evaluating changes.'],
     ['/evaluations', 'Evaluations', 'Compare the Inventory FAIL candidate with the Inventory PASS baseline. Failed required gates block release.'],

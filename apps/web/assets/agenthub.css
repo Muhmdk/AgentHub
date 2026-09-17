@@ -1,4 +1,6 @@
 @charset "UTF-8";
+/* White is the default; dark mode remains an explicit visitor choice. */
+:root:not([data-theme=dark]){--paper:#fff}
 /* Keep legacy console components readable without changing their behavior. */
 .operator .hero{padding:22px;text-align:left;background-image:none;isolation:auto}
 .operator .hero:before{display:none}

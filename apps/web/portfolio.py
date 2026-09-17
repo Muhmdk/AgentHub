@@ -37,74 +37,80 @@ def code(value: str) -> str:
 
 def home() -> str:
     return (
-        """<header class="hero"><p class="eyebrow">A project by Muhammad Khan · AgentOps / ModelOps</p>
-    <h1>An AI agent passed its tests.<br><em>What happens when it fails in production?</em></h1>
-    <p class="lede">AgentHub follows an agent from its first registered version to a carefully checked rollback.
-    A working exploration of how to release AI software, control what it can do, and explain what went wrong.</p>
+        """<header class="hero"><p class="eyebrow">A project by Muhammad Khan · Building safer AI systems</p>
+    <h1>Your AI works in a test.<br><em>What happens when something goes wrong?</em></h1>
+    <p class="lede">AgentHub is a project for testing and running AI assistants.
+    It checks new versions, limits what they can do, and helps you find and undo a bad change.</p>
     <div class="actions"><a class="button primary" href="/demo">Explore the lifecycle <span>↗</span></a><a class="button" href="/how-it-works">Follow the engineering</a></div>
-    <div class="hero-strip"><span>01 · Evaluate before release</span><span>02 · Observe every change</span><span>03 · Recover with evidence</span></div></header>"""
+    <div class="hero-strip"><span>01 · Test before use</span><span>02 · Watch for problems</span><span>03 · Check that the fix worked</span></div></header>"""
         + section(
             "01",
             "The starting point",
             "The answer is only the beginning.",
-            '<p class="intro">An agent can answer a question correctly today and behave differently after a change to its model, instructions, tools, or retrieval settings. Who approved that change? Which users saw it? Can we undo it?</p>'
+            '<p class="intro">An AI agent is software that can answer questions and use tools to do a task. A small change to its settings can make a good answer wrong or slow. Who made the change? Which version handled the request? Can we go back?</p>'
             + cards(
                 [
                     (
                         "The problem",
-                        "A successful chat response tells us little about whether a new version is safe to release. Teams also need identity, repeatable tests, permissions, operational evidence, and a recovery path.",
+                        "One good answer does not prove an AI assistant is ready for people to use. We need to test it, check its access, and keep records that help us fix problems.",
                     ),
                     (
                         "The project",
-                        "AgentHub connects those responsibilities in one control plane. Three small retail agents give the infrastructure something concrete to operate.",
+                        "AgentHub brings these checks into one place. It uses three store assistants to show the full process, from saving a new version to fixing a failed update.",
                     ),
                 ]
             ),
         )
         + section(
             "02",
-            "The workloads",
-            "Three agents. One operating model.",
+            "The demo assistants",
+            "Three useful jobs. The same safety checks.",
             cards(
                 [
                     (
                         "Inventory",
-                        "Uses structured retail data and read-only tools to identify stock risks. Example: which Toronto stores may run low on snow shovels?",
+                        "Checks store stock without changing it. For example: which Toronto stores may run low on snow shovels?",
                     ),
                     (
                         "Knowledge",
-                        "Retrieves policy documents and cites the evidence behind its answer. Example: can an unopened product be returned after 20 days?",
+                        "Looks up store rules and shows where its answer came from. For example: can I return an unopened product after 20 days?",
                     ),
                     (
                         "Shopping",
-                        "Finds products within a customer’s constraints and cites catalogue evidence. Example: recommend a snow shovel under $60.",
+                        "Finds products that match what a shopper needs, using the store catalogue. For example: find a snow shovel under $60.",
                     ),
                 ]
             ),
         )
         + section(
             "03",
-            "The lifecycle",
-            "A release has to earn its traffic.",
+            "Step by step",
+            "Check a new version before more people use it.",
             '<ol class="journey">'
             + "".join(
                 f"<li><span>{i:02}</span><strong>{title}</strong><p>{desc}</p></li>"
                 for i, (title, desc) in enumerate(
                     [
-                        ("Register", "Record an immutable version and its owner."),
-                        ("Evaluate", "Block candidates that fail required checks."),
-                        ("Govern", "Enforce permissions outside the model."),
-                        ("Release gradually", "Compare shadow results and limit canary exposure."),
-                        ("Observe", "Measure requests, latency, failures, and cost."),
                         (
-                            "Investigate & recover",
-                            "Cite evidence, restore a known-good route, verify health.",
+                            "Save a version",
+                            "Record its settings and who owns it. Keep that record unchanged.",
+                        ),
+                        ("Run tests", "Stop a new version if it fails a required check."),
+                        ("Check access", "Let code decide which tools the AI is allowed to use."),
+                        (
+                            "Start small",
+                            "Compare the new version with the old one. Send it only a small share of requests.",
+                        ),
+                        ("Watch results", "Track response time, errors, and cost."),
+                        (
+                            "Find and fix problems",
+                            "Read the saved records, switch back to a working version, and check the results.",
                         ),
                     ],
                     1,
                 )
             )
-            + '</ol><a class="text-link" href="/demo">Walk through every transition →</a>',
+            + '</ol><a class="text-link" href="/demo">Try each step →</a>',
         )
         + section(
             "04",
@@ -113,64 +119,64 @@ def home() -> str:
             cards(
                 [
                     (
-                        "Immutable identity",
-                        "A registered version cannot silently change its manifest. Later evaluations and release evidence retain a trustworthy reference.",
+                        "Saved versions stay the same",
+                        "Once a version is saved, its settings cannot be replaced under the same version number. Tests and release records still point to the exact version they checked.",
                     ),
                     (
-                        "A modular monolith",
-                        "FastAPI composes separate domain modules around PostgreSQL transactions. This keeps local operation practical while making boundaries explicit.",
+                        "One app, separate parts",
+                        "The app runs as one service, with separate code for tests, access rules, releases, and repairs. PostgreSQL transactions save related changes together, so a half-finished update does not become the new state.",
                     ),
                     (
-                        "Policy outside the prompt",
-                        "The model proposes actions; authorization code decides whether they may run. Prompts cannot grant permissions.",
+                        "The AI cannot give itself access",
+                        "The AI can ask to use a tool. Separate code checks whether it is allowed. Changing the AI's instructions does not give it more access.",
                     ),
                     (
-                        "Evidence before promotion",
-                        "Canary guardrails require enough observations and healthy telemetry. Missing measurements block promotion.",
+                        "No data means no wider release",
+                        "The new version must have enough test results and recent measurements before it gets more requests. Missing data does not count as a pass.",
                     ),
                     (
-                        "Analysis without actuation",
-                        "Incident analysis cites persisted evidence. A separate coordinator checks and executes rollback intent.",
+                        "Finding a cause does not grant control",
+                        "The part that explains a failure points to saved records. It cannot change a running release. Separate code checks whether switching back is allowed and carries out that change.",
                     ),
                     (
-                        "Execution is not recovery",
-                        "A rollback can execute successfully while the service remains unhealthy. Recovery requires a separate observation window.",
+                        "A completed change is not a proven fix",
+                        "Switching back to an older version is called a rollback. That step can finish while the service still has problems. New measurements must show that it is working again.",
                     ),
                 ]
             ),
         )
-        + section("05", "Architecture", "Follow the request. Follow the evidence.", architecture())
+        + section("05", "How it is built", "Where a request goes.", architecture())
         + section(
             "06",
-            "Failure design",
-            "What happens when a dependency fails?",
+            "When things break",
+            "What if part of the system stops working?",
             cards(
                 [
                     (
-                        "Policy unavailable",
-                        "Authorization fails closed. The request does not proceed as if permission were granted.",
+                        "The access check is down",
+                        "The request stops. The system does not assume that a missing check means permission was granted.",
                     ),
                     (
-                        "Candidate times out",
-                        "Shadow failures are isolated from the stable response. Candidate observations retain a safe failure result.",
+                        "The test version is too slow",
+                        "During a background comparison, the user still gets the current version's answer. A slow test version is recorded as a failure instead of breaking that answer.",
                     ),
                     (
-                        "Database unavailable",
-                        "Readiness reports failure; liveness remains separate. Connection pools and shutdown work are bounded.",
+                        "The database is down",
+                        "The service reports that it is not ready to handle work. A separate check shows whether the app itself is still running. Database connections have limits.",
                     ),
                     (
-                        "Rollback is repeated",
-                        "The coordinator uses persisted state and idempotent operations to protect the route and audit trail.",
+                        "Someone asks for the same fix twice",
+                        "The system checks what has already happened before changing where requests go. Repeating a rollback request should not create a second, conflicting change.",
                     ),
                 ]
             ),
         )
-        + section("07", "Proof boundaries", "Know what you are looking at.", boundaries())
-        + section("08", "Questions worth asking", "The tradeoffs are part of the project.", faq())
+        + section("07", "What is real", "What this demo does and does not show.", boundaries())
+        + section("08", "Common questions", "Why build it this way?", faq())
         + section(
             "09",
             "Explore further",
-            "From explanation to execution.",
+            "Try it on your computer.",
             '<p>Python · FastAPI · PostgreSQL · SQLAlchemy · Alembic · OPA · OpenTelemetry · Prometheus · Tempo · Grafana · Docker · Helm · Terraform</p><div class="actions"><a class="button primary" href="/try-locally">Run AgentHub locally</a><a class="button" href="/evidence">Inspect the evidence</a></div>',
         )
     )
@@ -178,26 +184,26 @@ def home() -> str:
 
 def architecture() -> str:
     return """<div class="architecture" aria-label="Request and control-plane architecture">
-    <div class="arch-row"><span>Caller</span><b>→</b><span>Gateway & identity</span><b>→</b><span>Policy & budgets</span><b>→</b><span>Agent / model / tools</span></div>
-    <div class="arch-row"><span>Registry</span><b>→</b><span>Evaluation</span><b>→</b><span>Release & canary</span><b>→</b><span>Incident & rollback</span></div>
-    <p>PostgreSQL stores versions, decisions, routes, and audit evidence.</p>
-    <div class="arch-row"><span>OpenTelemetry Collector</span><b>→</b><span>Prometheus · metrics</span><span>Tempo · traces</span><span>Grafana · inspection</span></div></div>"""
+    <div class="arch-row"><span>User sends a request</span><b>→</b><span>Check who sent it</span><b>→</b><span>Check access and spending limits</span><b>→</b><span>AI uses allowed tools</span></div>
+    <div class="arch-row"><span>Save a version</span><b>→</b><span>Run tests</span><b>→</b><span>Try a small release</span><b>→</b><span>Find problems and switch back</span></div>
+    <p>PostgreSQL is the database. It keeps the version history and records of what changed and why.</p>
+    <div class="arch-row"><span>OpenTelemetry collects measurements</span><b>→</b><span>Prometheus stores counts and timings</span><span>Tempo stores the steps of each request</span><span>Grafana shows the results</span></div></div>"""
 
 
 def boundaries() -> str:
     return cards(
         [
             (
-                "Implemented locally",
-                "Real API handlers, PostgreSQL records, policy checks, evaluation gates, route transitions, audits, and telemetry instrumentation.",
+                "Working software",
+                "The app runs real code for tests, access checks, releases, and rollback. It saves records in PostgreSQL and measures requests handled by the running app.",
             ),
             (
-                "Synthetic inputs",
-                "Fictional retail data, deterministic model outputs, seeded candidate observations, and an injected retrieval incident. These are repeatable fixtures.",
+                "Made-up demo data",
+                "The store data, sample AI answers, and staged failure are made for this demo. The same inputs give the same results, so you can repeat the test without paying for an AI service.",
             ),
             (
-                "Reference infrastructure",
-                "Azure adapters, Terraform, and Helm are provided. This portfolio does not claim a running Azure deployment or production-scale validation.",
+                "Cloud setup still needs testing",
+                "The repo includes code and setup files for Azure. This page shows the local project, not a live cloud service or proof that it can handle a large number of real users.",
             ),
         ]
     )
@@ -208,28 +214,28 @@ def faq() -> str:
         f"<details><summary>{q}</summary><p>{a}</p></details>"
         for q, a in [
             (
-                "Why deterministic providers?",
-                "They make regressions reproducible and keep the default demo free of paid model calls. Real-provider accuracy, latency, and cost require separate evaluation.",
+                "Why use fixed sample AI answers?",
+                "They let you repeat the same test and see the same failure without paying for an AI service. A real model can give different answers. Its accuracy, speed, and cost would need separate tests.",
             ),
             (
-                "Why not use an existing agent platform?",
-                "This project makes the lifecycle mechanisms inspectable: database constraints, policy boundaries, release state, and recovery evidence. It is a learning and engineering reference, not a claim to replace a managed platform.",
+                "Why build this instead of using an existing platform?",
+                "The goal is to show how the checks work underneath the screens. You can read the code that blocks a release, checks access, and handles a failed update. This project is for learning and testing these ideas; it does not claim to replace a hosted platform.",
             ),
             (
-                "What is the main engineering challenge?",
-                "Keeping the facts consistent across versions, evaluation results, releases, traffic routes, and incidents. Immutable references and transactional state transitions make those relationships explicit.",
+                "What is the hardest part of the design?",
+                "Keeping every record tied to the right version. A test result is only useful if it describes the version being released. Saved version records cannot be replaced, and related database changes are saved together.",
             ),
             (
-                "How would this scale?",
-                "The local baseline uses one API process. A deployment needs realistic provider tests, database connection budgeting, identity integration, and measured scaling behavior before capacity claims.",
+                "Could it handle more users?",
+                "That needs testing. The local demo runs one app process. Before adding more users, I would test real AI services, set database connection limits, connect user accounts, and measure where the system slows down.",
             ),
             (
-                "What would change next?",
-                "A production deployment would need organization-specific access controls, operational ownership, deployment-specific recovery drills, and representative workloads. The current scope proves the local lifecycle.",
+                "What is needed before a company could use it?",
+                "The team would need its own access rules, people responsible for running the service, tests based on real tasks, and practice recovering from failures. The current project shows the process on a local machine.",
             ),
             (
-                "How do I add an agent?",
-                "Implement the runtime contract, declare its model and tools in a manifest, supply evaluation fixtures and gates, and register a version. Then exercise the same governance and release boundaries.",
+                "How do I add another AI assistant?",
+                "Write its task code and a settings file that lists its model and tools. Add sample questions and rules for passing the tests. Save a version, then run it through the same access checks and release steps.",
             ),
         ]
     )
@@ -489,8 +495,8 @@ def render_page(path: str) -> str:
         f'<a href="{url}"' + (' aria-current="page"' if url == path else "") + f">{label}</a>"
         for url, label in NAV
     )
-    description = "AgentHub by Muhammad Khan: an inspectable AI agent lifecycle from registration and evaluation to evidence-based rollback."
+    description = "AgentHub by Muhammad Khan: test AI assistants, control their access, and find and undo bad changes."
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{title} · AgentHub by Muhammad Khan</title><meta name="description" content="{description}"><meta property="og:title" content="{title} · AgentHub"><meta property="og:description" content="{description}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/assets/agenthub.css"><script src="/assets/shell.js" defer></script></head>
     <body class="portfolio"><a class="skip-link" href="#main-content">Skip to main content</a><nav class="site-nav" aria-label="Main navigation"><a class="brand" href="/">A<span>↗</span></a>{nav}<button class="theme-toggle" type="button" aria-label="Switch color theme">◐</button></nav>
-    <main id="main-content" tabindex="-1">{content()}</main><footer><a class="brand" href="/">AgentHub</a><p>Designed and built by Muhammad Khan.<br>Local implementation · synthetic demo inputs · inspectable evidence.</p><a href="{SOURCE}">Source on GitHub ↗</a></footer></body></html>'''
+    <main id="main-content" tabindex="-1">{content()}</main><footer><a class="brand" href="/">AgentHub</a><p>Designed and built by Muhammad Khan.<br>Runs locally · uses sample data · shows how decisions were made.</p><a href="{SOURCE}">Code on GitHub ↗</a></footer></body></html>'''
