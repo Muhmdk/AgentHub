@@ -1,7 +1,7 @@
 PYTHON ?= python3.14
 VENV := .venv
 BIN := $(VENV)/bin
-UV_VERSION := 0.12.11
+UV_VERSION := 0.13.4
 TERRAFORM ?= terraform
 HELM ?= helm
 KUBECONFORM ?= kubeconform
