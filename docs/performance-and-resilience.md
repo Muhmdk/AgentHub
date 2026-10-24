@@ -55,6 +55,40 @@ The process-level CI test sends 60 health requests at concurrency 8. Its thresho
 than this machine's measurements. They detect deadlocks, accidental serialization,
 and gross regressions without pretending that a shared CI runner is a benchmark lab.
 
+## Agent gateway measurement
+
+Health and fleet endpoints are not agent calls. To measure the full local request
+path, run the separate bounded agent scenario while a deterministic `make demo`
+server is running:
+
+```console
+make measure-agents BASE_URL=http://127.0.0.1:8000 \
+  AGENT_ARGS="--repeats 2 --concurrency 1 --acknowledge-invocations"
+```
+
+This sends two requests each to Inventory, Knowledge, and Shopping through the
+authenticated gateway. It reports p50/p95/p99 latency, throughput, HTTP failures,
+citation presence, fixture-answer matches, and normalized token/cost totals. It
+prints no submitted questions, answer text, bearer token, or response body. The
+script caps repeats at 50 and concurrency at 4. The explicit acknowledgement is
+required because an agent call may incur provider costs if the target is configured
+to use a paid model, even on localhost.
+
+PR CI runs the same six-request scenario against a newly started API with the fake
+model, local retrieval, and its isolated PostgreSQL service. The JSON report is in
+the **Measure deterministic agent gateway** job log. CI requires all six HTTP
+requests to succeed, include citations, and match the deterministic fixture answers.
+Latency values are observations for that shared runner only, not a capacity target.
+The fixture-answer check is a reproducibility check, not a general measure of AI
+answer quality.
+
+For a remote HTTPS environment, set `AGENTHUB_LOAD_BEARER_TOKEN` and
+`AGENTHUB_LOAD_IDENTITY`, add `--allow-remote`, and use `--no-fixture-checks` only
+when the provider is not deterministic. This relaxes exact-answer matching but
+still checks nonempty answers and citations; semantic correctness needs a separate
+versioned evaluation. Do not compare local and remote p95 as if their providers,
+network, data, and hardware were the same.
+
 ## Initial resource defaults
 
 The Helm defaults now request 250 millicores and 256 MiB and limit the API to one CPU
@@ -91,8 +125,9 @@ release, and incident recovery procedures live beside it in `docs/runbooks/`.
 
 ## Known limits
 
-- The baseline is loopback traffic with deterministic providers, not end-user agent
-  invocation load.
+- The recorded September baseline is control-plane loopback traffic, not end-user
+  agent invocation load. The newer agent-gateway CI scenario is a small functional
+  load check, not a production capacity study.
 - It does not measure Azure OpenAI, Azure AI Search, TLS, ingress, cross-zone database
   latency, or OpenTelemetry backend pressure.
 - A single Uvicorn worker cannot use more than one CPU for Python-heavy work. Scale-out

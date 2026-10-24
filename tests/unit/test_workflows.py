@@ -62,6 +62,7 @@ def test_pr_ci_covers_required_checks_and_preserves_quality_gate() -> None:
         "make lint",
         "make typecheck",
         "make test",
+        "make measure-agents",
         "make security",
     ):
         assert command in workflow

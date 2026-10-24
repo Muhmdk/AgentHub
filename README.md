@@ -194,6 +194,7 @@ Useful targets:
 | `make docs-check` | Validate local documentation links, images, and documented targets |
 | `make clean-install` | Build and import the wheel in a fresh locked environment |
 | `make measure-load BASE_URL=...` | Bounded measured gateway/control-plane baseline |
+| `make measure-agents BASE_URL=... AGENT_ARGS="--acknowledge-invocations"` | Bounded real agent-gateway requests, latency, citations, and usage |
 | `make security` | Secret and dependency vulnerability checks |
 | `make policy` | Format, validate, and test Rego policies |
 | `make infra-validate` | Terraform, Helm, schema, and Kubernetes security checks |

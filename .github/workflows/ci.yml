@@ -70,6 +70,26 @@ jobs:
         run: make migrate
       - name: Run unit, contract, integration, and selected end-to-end tests
         run: make test
+      - name: Measure deterministic agent gateway
+        env:
+          AGENTHUB_ENVIRONMENT: test
+          AGENTHUB_MODEL_PROVIDER: fake
+          AGENTHUB_RETRIEVAL_PROVIDER: local
+        run: |
+          .venv/bin/python -m apps.api > "$RUNNER_TEMP/agenthub-benchmark-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true; wait "$api_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8000/health/ready >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+          make measure-agents BASE_URL=http://127.0.0.1:8000 \
+            AGENT_ARGS="--repeats 2 --concurrency 1 --acknowledge-invocations"
 
   policy:
     name: Policy
