@@ -193,13 +193,14 @@ def measure_agents(
     )
 
 
-def report_passes(report: AgentLoadReport) -> bool:
-    """Require successful HTTP, grounded structure, and optional fixture answers."""
+def report_passes(report: AgentLoadReport, *, max_p95_ms: float | None = None) -> bool:
+    """Require successful HTTP, grounded structure, and explicit optional latency."""
     requests = report.load.request_count
     return (
         report.load.failure_count == 0
         and report.structurally_valid == requests
         and (not report.fixture_checks or report.fixture_matches == requests)
+        and (max_p95_ms is None or report.load.p95_latency_ms <= max_p95_ms)
     )
 
 
@@ -209,6 +210,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument("--timeout-seconds", type=float, default=10)
+    parser.add_argument("--max-p95-ms", type=float)
     parser.add_argument("--allow-remote", action="store_true")
     parser.add_argument("--no-fixture-checks", action="store_true")
     parser.add_argument(
@@ -219,6 +221,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parsed = parser.parse_args(arguments)
     if not parsed.acknowledge_invocations:
         parser.error("Pass --acknowledge-invocations before sending agent requests")
+    if parsed.max_p95_ms is not None and parsed.max_p95_ms <= 0:
+        parser.error("--max-p95-ms must be greater than zero")
     try:
         operation = AgentHttpOperation(
             parsed.base_url,
@@ -234,7 +238,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
     print(json.dumps(asdict(report), indent=2, sort_keys=True))
-    return 0 if report_passes(report) else 1
+    return 0 if report_passes(report, max_p95_ms=parsed.max_p95_ms) else 1
 
 
 if __name__ == "__main__":

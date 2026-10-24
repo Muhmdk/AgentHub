@@ -62,6 +62,7 @@ def test_agent_measurement_uses_gateway_and_aggregates_grounded_results(
     assert report.per_agent_requests == dict.fromkeys(answers, 2)
     assert sorted(called) == sorted(list(answers) * 2)
     assert report_passes(report)
+    assert not report_passes(report, max_p95_ms=0.001)
 
 
 def test_missing_citation_fails_quality_even_with_http_200(

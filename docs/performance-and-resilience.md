@@ -77,8 +77,9 @@ to use a paid model, even on localhost.
 PR CI runs the same six-request scenario against a newly started API with the fake
 model, local retrieval, and its isolated PostgreSQL service. The JSON report is in
 the **Measure deterministic agent gateway** job log. CI requires all six HTTP
-requests to succeed, include citations, and match the deterministic fixture answers.
-Latency values are observations for that shared runner only, not a capacity target.
+requests to succeed, include citations, match the deterministic fixture answers, and
+stay below a deliberately broad 1,000 ms p95 regression guard. Latency values are
+observations for that shared runner only, not a capacity target.
 The fixture-answer check is a reproducibility check, not a general measure of AI
 answer quality.
 

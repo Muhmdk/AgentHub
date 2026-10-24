@@ -89,7 +89,7 @@ jobs:
           done
           test "$ready" = true
           make measure-agents BASE_URL=http://127.0.0.1:8000 \
-            AGENT_ARGS="--repeats 2 --concurrency 1 --acknowledge-invocations"
+            AGENT_ARGS="--repeats 2 --concurrency 1 --max-p95-ms 1000 --acknowledge-invocations"
 
   policy:
     name: Policy
