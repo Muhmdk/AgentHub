@@ -460,7 +460,24 @@ CONSOLES = [
 ]
 
 
-def console() -> str:
+def console(public: bool = False) -> str:
+    screenshots = {
+        "Registry": "registry.png",
+        "Evaluations": "evaluation-gates.png",
+        "Governance": "governance-deny.png",
+        "Observability": "observability-slo.png",
+        "Delivery": "progressive-delivery.png",
+        "Incidents": "incident-investigation.png",
+    }
+    if public:
+        return (
+            '<header class="page-head"><p class="eyebrow">Operator workspace</p><h1>See the system<br><em>make decisions.</em></h1><p class="lede">These are screenshots from the local demo. Run AgentHub on your machine to use the live controls.</p></header><div class="cards console-gallery">'
+            + "".join(
+                f'<article><img loading="lazy" src="/images/{screenshots[title]}" alt="{title} console showing AgentHub demo evidence"><p class="eyebrow">{i:02} / Console</p><h2>{title}</h2><p>{desc}</p></article>'
+                for i, (_route, title, desc) in enumerate(CONSOLES, 1)
+            )
+            + '</div><p class="console-help"><a class="button primary" href="/try-locally">Run the full system locally →</a></p>'
+        )
     return (
         '<header class="page-head"><p class="eyebrow">Operator workspace</p><h1>Inspect the<br><em>running system.</em></h1><p class="lede">These consoles read your local API. Seeded scenario records are synthetic; runtime measurements come from your API process.</p></header><div class="cards">'
         + "".join(
@@ -489,8 +506,9 @@ PAGES = {
 }
 
 
-def render_page(path: str) -> str:
+def render_page(path: str, *, public: bool = False) -> str:
     title, content = PAGES[path]
+    page_content = console(public=True) if public and path == "/console" else content()
     nav = "".join(
         f'<a href="{url}"' + (' aria-current="page"' if url == path else "") + f">{label}</a>"
         for url, label in NAV
@@ -498,5 +516,5 @@ def render_page(path: str) -> str:
     description = "AgentHub by Muhammad Khan: test AI assistants, control their access, and find and undo bad changes."
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{title} · AgentHub by Muhammad Khan</title><meta name="description" content="{description}"><meta property="og:title" content="{title} · AgentHub"><meta property="og:description" content="{description}"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/assets/agenthub.css"><script src="/assets/shell.js" defer></script></head>
-    <body class="portfolio"><a class="skip-link" href="#main-content">Skip to main content</a><nav class="site-nav" aria-label="Main navigation"><a class="brand" href="/">A<span>↗</span></a>{nav}<button class="theme-toggle" type="button" aria-label="Switch color theme">◐</button></nav>
-    <main id="main-content" tabindex="-1">{content()}</main><footer><a class="brand" href="/">AgentHub</a><p>Designed and built by Muhammad Khan.<br>Runs locally · uses sample data · shows how decisions were made.</p><a href="{SOURCE}">Code on GitHub ↗</a></footer></body></html>'''
+    <body class="portfolio"{' data-static="true"' if public else ""}><a class="skip-link" href="#main-content">Skip to main content</a><nav class="site-nav" aria-label="Main navigation"><a class="brand" href="/">A<span>↗</span></a>{nav}<button class="theme-toggle" type="button" aria-label="Switch color theme">◐</button></nav>
+    <main id="main-content" tabindex="-1">{page_content}</main><footer><a class="brand" href="/">AgentHub</a><p>Designed and built by Muhammad Khan.<br>Runs locally · uses sample data · shows how decisions were made.</p><a href="{SOURCE}">Code on GitHub ↗</a></footer></body></html>'''

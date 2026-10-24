@@ -13,7 +13,7 @@ authors = [{ name = "Muhammad Khan", email = "Muhammadlive_@hotmail.com" }]
 dependencies = [
   "alembic>=1.16,<2",
   "azure-identity>=1.25.3,<2",
-  "azure-monitor-opentelemetry-exporter==1.0.0b57",
+  "azure-monitor-opentelemetry-exporter==1.0.0b58",
   "fastapi>=0.115,<1",
   "langgraph>=1.0,<2",
   "opentelemetry-api>=1.42,<2",

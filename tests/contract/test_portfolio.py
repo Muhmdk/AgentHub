@@ -1,6 +1,7 @@
 """Public portfolio remains available without a running database."""
 
 from html.parser import HTMLParser
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 from apps.api.config import Settings
 from apps.api.main import create_app
 from apps.web.portfolio import PAGES
+from scripts.export_portfolio import export
 
 
 class Links(HTMLParser):
@@ -46,3 +48,20 @@ def test_static_mount_cannot_read_application_source() -> None:
         .headers["content-type"]
         .startswith(("text/javascript", "application/javascript"))
     )
+
+
+@pytest.mark.contract
+def test_public_export_has_working_internal_links_and_no_live_controls(tmp_path: Path) -> None:
+    export(tmp_path, "/AgentHub")
+    for route in PAGES:
+        page = tmp_path / route.removeprefix("/") / "index.html"
+        html = page.read_text(encoding="utf-8")
+        assert 'data-static="true"' in html
+        links = Links()
+        links.feed(html)
+        for url in links.urls:
+            assert url.startswith("/AgentHub/"), (route, url)
+            target = tmp_path / url.removeprefix("/AgentHub/")
+            assert target.is_file() or (target / "index.html").is_file(), (route, url)
+    assert "Run the full system locally" in (tmp_path / "console/index.html").read_text()
+    assert "publicPreview" in (tmp_path / "assets/demo.js").read_text()

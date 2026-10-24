@@ -113,7 +113,7 @@ def test_end_to_end_spans_propagate_context_without_prompt_content() -> None:
         "model.generate",
     }
     exported = " ".join(
-        f"{key}={value}" for span in spans for key, value in (span.attributes or {}).items()
+        f"{key}={value!r}" for span in spans for key, value in (span.attributes or {}).items()
     )
     assert "Can I return" not in exported
     assert "otel-contract-1" in exported

@@ -28,6 +28,7 @@ def test_every_workflow_is_valid_yaml_with_read_only_default_permissions() -> No
         "candidate-evaluation.yml",
         "ci.yml",
         "infrastructure.yml",
+        "portfolio-pages.yml",
         "release.yml",
     }
     for path in paths:
