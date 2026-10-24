@@ -1,6 +1,9 @@
 # Portfolio presentation
 
-AgentHub serves its employer-facing project story at `/`. The shared style uses
+AgentHub serves its employer-facing project story at `/`. A read-only export is
+published at https://muhmdk.github.io/AgentHub/ from the `Portfolio Pages` workflow.
+It includes the interactive example and console screenshots. API-backed controls
+require the local stack. The shared style uses
 editorial headings, a quiet blueprint grid, a teal accent, and light/dark themes.
 The presentation is inspired by the structure of https://ckpt.tasfiqj.com/;
 its text, implementation, and project claims are specific to AgentHub.
@@ -54,3 +57,8 @@ The operator consoles load the same theme and navigation. No frontend runtime de
 is required. Wheel packaging includes the assets; clean-install verification checks them.
 The guide's database-backed tests require a disposable test database because fixtures
 clear AgentHub tables. Never run them against an active demo or valuable records.
+
+Run `python -m scripts.export_portfolio` to build the public copy in
+`build/portfolio`. The exporter rewrites application links for the GitHub Pages
+project path and copies only static assets and screenshots. The published copy has
+no API connection and cannot change local or cloud releases.

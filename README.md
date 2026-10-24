@@ -10,6 +10,13 @@ final `main` verification is green.
 
 ![AgentHub progressive delivery console](docs/images/progressive-delivery.png)
 
+## Explore in a browser
+
+The [public project walkthrough](https://muhmdk.github.io/AgentHub/) shows the release
+story, an interactive example, console screenshots, and the code behind each step. It
+uses sample records and does not need an account or a running API. To inspect your own
+API records and use the operator controls, run the local demo below.
+
 ## Run the complete local demo
 
 Prerequisites: Python 3.14, Docker with Compose, GNU Make, and Git. From a clean clone:

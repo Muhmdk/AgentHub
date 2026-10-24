@@ -16,17 +16,21 @@
   const el = id => document.getElementById(id);
   let index = 0, generation = 0;
   const mode = el('demo-mode');
-  if (new URLSearchParams(location.search).get('mode') === 'live') mode.value = 'live';
+  const publicPreview = document.body.dataset.static === 'true';
+  if (publicPreview) {
+    mode.querySelector('[value="live"]').remove();
+    mode.closest('.demo-toolbar').hidden = true;
+  } else if (new URLSearchParams(location.search).get('mode') === 'live') mode.value = 'live';
   const events = [];
   const safeJSON = value => JSON.stringify(value, null, 2);
   function record(text) { events.unshift(text); const list = el('demo-events'); list.replaceChildren(); events.slice(0,12).forEach(value => {const li = document.createElement('li'); li.textContent = value; list.append(li);}); }
   function render() {
     generation++;
     const step = steps[index], live = mode.value === 'live';
-    el('mode-notice').textContent = live ? 'Local API walkthrough · “Inspect evidence” reads this server. Consequential actions remain in the operator console. Restarting this walkthrough does not reset your database.' : 'Browser simulation · illustrative records only. No backend requests, deployment changes, real telemetry, or cloud resources are used in this mode.';
+    el('mode-notice').textContent = live ? 'Local API walkthrough · “Inspect evidence” reads this server. Consequential actions remain in the operator console. Restarting this walkthrough does not reset your database.' : 'Interactive example using sample records. No API requests or changes to a running service happen here.';
     el('stage-count').textContent = `${String(index+1).padStart(2,'0')} / ${steps.length} · ${live ? 'Local API' : 'Simulation'}`;
     el('stage-title').textContent = step.title; el('stage-description').textContent = step.text;
-    el('stage-console').href = live ? step.route : '/try-locally';
+    el('stage-console').href = live ? step.route : (publicPreview ? '../try-locally/' : '/try-locally');
     el('stage-console').textContent = live ? 'Open operator screen ↗' : 'Run the real system →';
     el('stage-action').disabled = false; el('stage-action').textContent = live ? 'Inspect current evidence' : 'Show illustrative outcome';
     el('stage-status').textContent = ''; el('stage-raw').textContent = 'Inspect this stage to see its record.';
