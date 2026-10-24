@@ -1,14 +1,18 @@
 """Public portfolio remains available without a running database."""
 
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 
 from apps.api.config import Settings
 from apps.api.main import create_app
-from apps.web.portfolio import PAGES
+from apps.web.portfolio import PAGES, failure_story
+from packages.contracts.delivery import DeliveryEnvironment
+from packages.incidents.faults import TopKRegressionFault
 from scripts.export_portfolio import export
 
 
@@ -65,3 +69,26 @@ def test_public_export_has_working_internal_links_and_no_live_controls(tmp_path:
             assert target.is_file() or (target / "index.html").is_file(), (route, url)
     assert "Run the full system locally" in (tmp_path / "console/index.html").read_text()
     assert "publicPreview" in (tmp_path / "assets/demo.js").read_text()
+
+
+@pytest.mark.contract
+def test_failure_story_numbers_match_the_seeded_fault() -> None:
+    scenario = TopKRegressionFault().build(
+        agent_name="knowledge-agent",
+        environment=DeliveryEnvironment.PRODUCTION,
+        release_id=UUID(int=1),
+        route_id=UUID(int=2),
+        canary_rollout_id=UUID(int=3),
+        observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    story = failure_story()
+    assert scenario.baseline.top_k == 5
+    assert scenario.candidate.top_k == 50
+    for before, after in (
+        (scenario.baseline.retrieval_p95_latency_ms, scenario.candidate.retrieval_p95_latency_ms),
+        (scenario.baseline.model_p95_latency_ms, scenario.candidate.model_p95_latency_ms),
+        (scenario.baseline.agent_p95_latency_ms, scenario.candidate.agent_p95_latency_ms),
+    ):
+        assert f"{before:g} → {after:g} ms" in story
+    assert f"{scenario.signal.threshold:g} ms" in story
+    assert "synthetic data" in story
