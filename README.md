@@ -17,6 +17,12 @@ story, an interactive example, console screenshots, and the code behind each ste
 uses sample records and does not need an account or a running API. To inspect your own
 API records and use the operator controls, run the local demo below.
 
+For a quick proof path, read the [retrieval failure story](https://muhmdk.github.io/AgentHub/failure-story/),
+inspect the [full lifecycle test](tests/e2e/test_demo_lifecycle.py), and check the
+[latest main CI run](https://github.com/Muhmdk/AgentHub/actions/workflows/ci.yml?query=branch%3Amain).
+The [evidence page](https://muhmdk.github.io/AgentHub/evidence/) separates synthetic
+scenario records, actual local measurements, and work that still needs real-provider testing.
+
 ## Run the complete local demo
 
 Prerequisites: Python 3.14, Docker with Compose, GNU Make, and Git. From a clean clone:

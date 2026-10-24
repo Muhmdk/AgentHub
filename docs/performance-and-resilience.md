@@ -83,6 +83,20 @@ observations for that shared runner only, not a capacity target.
 The fixture-answer check is a reproducibility check, not a general measure of AI
 answer quality.
 
+One passing PR CI run on 2026-10-24 UTC recorded the following on a shared x86_64
+runner with Python 3.14.8, local PostgreSQL, fake model, local retrieval, one API
+process, and one request at a time. The exact JSON is in the
+[successful job log](https://github.com/Muhmdk/AgentHub/actions/runs/40044902379/job/120724482832).
+
+| Gateway calls | HTTP failures | Cited answers | Fixture matches | p50 | p95 | Throughput |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 6 (2 per agent) | 0 | 6 | 6 | 6.36 ms | 44.44 ms | 76.64 req/s |
+
+The nearest-rank p95 of six calls is the slowest call. This tiny sample is useful for
+detecting gross functional or latency regressions, not estimating real tail latency
+or sizing production capacity. Token totals were 690 input and 334 output with zero
+estimated provider cost under the fake model. A new run can differ on the same code.
+
 For a remote HTTPS environment, set `AGENTHUB_LOAD_BEARER_TOKEN` and
 `AGENTHUB_LOAD_IDENTITY`, add `--allow-remote`, and use `--no-fixture-checks` only
 when the provider is not deterministic. This relaxes exact-answer matching but

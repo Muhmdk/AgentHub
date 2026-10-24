@@ -13,10 +13,11 @@ its text, implementation, and project claims are specific to AgentHub.
 | Route | Purpose |
 | --- | --- |
 | `/` | Problem, workloads, lifecycle, decisions, architecture, limits, and Q&A |
+| `/failure-story` | Synthetic retrieval change, before-and-after latency, guardrail, and recovery boundary |
 | `/how-it-works` | Technical explanation with source and console links |
-| `/demo` | Twelve-stage browser simulation or local evidence walkthrough |
+| `/demo` | Twelve-stage browser simulation or local walkthrough of current API decisions |
 | `/try-locally` | Setup, request example, verification, reset, and troubleshooting |
-| `/evidence` | Dated validation snapshot and measured performance methodology |
+| `/evidence` | Current CI links, dated baseline, claim-to-test links, and limits |
 | `/console` | All six API-backed operator consoles |
 
 Existing console and API routes retain their behavior. Restart the Python API after
@@ -26,7 +27,9 @@ updating it. The portfolio replaces the previous root-to-registry redirect.
 
 Browser simulation starts by default. Its records are illustrative and selecting a
 stage never calls the backend. Local mode is explicit and reads the current server's
-API with bounded timeouts. Failures stay visible instead of becoming simulated success.
+API with bounded timeouts. Each stage interprets the matching record and says when
+expected proof is absent; a successful HTTP read is never shown as a passed gate.
+Failures stay visible instead of becoming simulated success.
 Use `/demo?mode=live` to enter local mode directly.
 
 The local guide links to the actual console for comparisons and rollback. It does not
@@ -39,16 +42,16 @@ authentication remains enforced; this change does not publish a public cloud ser
 
 ## Presenter sequence
 
-1. Explain the question on the home page and the three retail workloads.
+1. Explain the question on the home page and the three retail workloads, then show the failure story.
 2. Open the guided demo and show the blocked candidate and denied tool.
 3. In local mode, inspect actual records and invoke an agent using the provided command.
 4. Follow the trace through Observability; inspect the canary in Delivery.
 5. Open Incidents, read citations, request rollback, and explain recovery verification.
 6. Close with Evidence, the limitations, and the reproducible local setup.
 
-The evidence page identifies its test counts as a historical snapshot. Update that
-snapshot only with a new dated result. Local control-plane benchmarks do not represent
-model inference throughput or a production capacity guarantee.
+The evidence page links to the latest main CI checks first; its old test count is
+explicitly historical. It separates the dated control-plane baseline from the newer
+small agent-gateway CI check. Neither is a production capacity guarantee.
 
 ## Development
 
