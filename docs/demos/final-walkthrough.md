@@ -115,11 +115,10 @@ audited route transition and reports that recovery verification is still require
 
 This local click does not fabricate five minutes of post-rollback observations. The complete
 deterministic lifecycle—including `requested → executed → verifying → recovered`, incident
-resolution, and append-only audit ordering—is verified by:
-
-```console
-make test-e2e
-```
+resolution, and append-only audit ordering—is verified by the
+[isolated end-to-end test](../../tests/e2e/test_demo_lifecycle.py) in CI. Do not run
+`make test-e2e` against your active demo database: its fixtures clear AgentHub tables.
+Run it only with a disposable test database URL.
 
 The operational procedure and escalation boundary are in the
 [incident recovery runbook](../runbooks/incident-recovery.md).
@@ -129,9 +128,10 @@ The operational procedure and escalation boundary are in the
 To repeat the walkthrough, stop the foreground API with Ctrl-C and run:
 
 ```console
-make demo-reset
-make run
+make demo
 ```
+
+This safely resets the local demo scenario and starts the API with telemetry enabled again.
 
 To stop local services without deleting the PostgreSQL volume:
 

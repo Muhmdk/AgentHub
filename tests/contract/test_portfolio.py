@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from apps.api.config import Settings
 from apps.api.main import create_app
-from apps.web.portfolio import PAGES, failure_story
+from apps.web.portfolio import PAGES, SOURCE, evidence, failure_story, home
 from packages.contracts.delivery import DeliveryEnvironment
 from packages.incidents.faults import TopKRegressionFault
 from scripts.export_portfolio import export
@@ -26,6 +26,20 @@ class Links(HTMLParser):
         url = values.get("src") if tag == "script" else values.get("href")
         if url and url.startswith("/"):
             self.urls.add(url)
+
+
+class SourceLinks(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.paths: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        href = dict(attrs).get("href") or ""
+        prefix = f"{SOURCE}/blob/main/"
+        if href.startswith(prefix):
+            self.paths.add(href.removeprefix(prefix))
 
 
 @pytest.mark.contract
@@ -92,3 +106,14 @@ def test_failure_story_numbers_match_the_seeded_fault() -> None:
         assert f"{before:g} → {after:g} ms" in story
     assert f"{scenario.signal.threshold:g} ms" in story
     assert "synthetic data" in story
+
+
+@pytest.mark.contract
+def test_proof_links_point_to_real_repository_files() -> None:
+    links = SourceLinks()
+    links.feed(home() + evidence() + failure_story())
+    assert len(links.paths) >= 8
+    root = Path(__file__).parents[2]
+    for path in links.paths:
+        assert (root / path).is_file(), path
+    assert "Latest main checks" in evidence()

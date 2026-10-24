@@ -32,6 +32,17 @@ def cards(items: list[tuple[str, str]]) -> str:
     )
 
 
+def proof_cards(items: list[tuple[str, str, str, str]]) -> str:
+    return (
+        '<div class="cards proof-cards">'
+        + "".join(
+            f'<article><h3>{title}</h3><p>{body}</p><a class="text-link" href="{SOURCE}/blob/main/{path}">{label} ↗</a></article>'
+            for title, body, path, label in items
+        )
+        + "</div>"
+    )
+
+
 def code(value: str) -> str:
     return f'<div class="code-block"><pre><code>{escape(value)}</code></pre><button class="copy" type="button">Copy</button></div>'
 
@@ -87,7 +98,7 @@ def home() -> str:
             "03",
             "The failure story",
             "One setting changed. The whole request slowed down.",
-            '<p class="intro">In the repeatable demo, a Knowledge assistant goes from looking up 5 results to 50. The model takes the same time, but retrieval gets much slower. A canary check catches the change before more traffic moves to the new version.</p>'
+            '<p class="intro">In the repeatable demo, a Knowledge assistant goes from looking up 5 results to 50. The model takes the same time, but retrieval gets much slower. An injected guardrail signal opens an incident while the new version is still at 5% of traffic.</p>'
             '<div class="actions"><a class="button primary" href="/failure-story">See the numbers and recovery →</a><a class="text-link" href="/demo">Follow the interactive walkthrough →</a></div>',
         )
         + section(
@@ -124,31 +135,43 @@ def home() -> str:
             "05",
             "Engineering choices",
             "The decisions behind the screens.",
-            cards(
+            proof_cards(
                 [
                     (
                         "Saved versions stay the same",
                         "Once a version is saved, its settings cannot be replaced under the same version number. Tests and release records still point to the exact version they checked.",
+                        "tests/integration/test_registry_repository.py",
+                        "See the version test",
                     ),
                     (
                         "One app, separate parts",
                         "The app runs as one service, with separate code for tests, access rules, releases, and repairs. PostgreSQL transactions save related changes together, so a half-finished update does not become the new state.",
+                        "tests/e2e/test_demo_lifecycle.py",
+                        "See the full lifecycle test",
                     ),
                     (
                         "The AI cannot give itself access",
                         "The AI can ask to use a tool. Separate code checks whether it is allowed. Changing the AI's instructions does not give it more access.",
+                        "tests/integration/test_governance_gateway.py",
+                        "See the access tests",
                     ),
                     (
                         "No data means no wider release",
                         "The new version must have enough test results and recent measurements before it gets more requests. Missing data does not count as a pass.",
+                        "tests/e2e/test_progressive_delivery.py",
+                        "See the canary tests",
                     ),
                     (
                         "Finding a cause does not grant control",
                         "The part that explains a failure points to saved records. It cannot change a running release. Separate code checks whether switching back is allowed and carries out that change.",
+                        "tests/integration/test_rollback_coordinator.py",
+                        "See the rollback checks",
                     ),
                     (
                         "A completed change is not a proven fix",
                         "Switching back to an older version is called a rollback. That step can finish while the service still has problems. New measurements must show that it is working again.",
+                        "tests/e2e/test_incident_rollback.py",
+                        "See the recovery test",
                     ),
                 ]
             ),
@@ -215,14 +238,14 @@ def failure_story() -> str:
             '<div class="latency-row"><span>Model</span><span class="latency-track"><i style="--bar:28.57%"></i><i class="candidate" style="--bar:28.57%"></i></span><strong>200 → 200 ms</strong></div>'
             '<div class="latency-row"><span>Whole agent</span><span class="latency-track"><i style="--bar:42.14%"></i><i class="candidate" style="--bar:100%"></i></span><strong>295 → 700 ms</strong></div>'
             '</div><p class="chart-key"><span class="stable-key"></span> Stable &nbsp; <span class="candidate-key"></span> Candidate · all bars use the same 700 ms scale.</p>'
-            "<p>That pattern matters: the unchanged model timing makes the retrieval setting a stronger explanation than a slow model. It is still an inference from evidence, not proof from a production investigation.</p>",
+            "<p>That pattern matters: the unchanged model timing makes the retrieval setting a stronger explanation than a slow model. In this fixture, the two component times are added to make the total. A real service must time the whole request; adding separate p95 values is not a true end-to-end p95.</p>",
         )
         + section(
             "03",
             "The decision",
-            "The canary crosses its limit.",
+            "The injected signal crosses its limit.",
             '<div class="story-decision"><p><strong>Allowed p95:</strong> 442.5 ms (1.5 × the stable 295 ms)</p><p><strong>Candidate p95:</strong> 700 ms (about 2.37 × stable)</p><p class="decision-result">Result: guardrail breach → critical incident</p></div>'
-            "<p>AgentHub saves the changed setting, retrieval timing, and unchanged model timing as separate evidence. The incident view links those records to the candidate release and route.</p>"
+            "<p>The demo injects this guardrail-failure signal; it does not claim a real production monitor caught the fault. AgentHub saves the changed setting, retrieval timing, and unchanged model timing as separate evidence linked to the candidate release and route.</p>"
             '<div class="actions"><a class="text-link" href="/console">See the incident screen →</a>'
             f'<a class="text-link" href="{SOURCE}/blob/main/tests/e2e/test_demo_lifecycle.py">Inspect the lifecycle test ↗</a></div>',
         )
@@ -449,40 +472,52 @@ def evidence() -> str:
         '<header class="page-head"><p class="eyebrow">Evidence & limits</p><h1>Claims you can<br><em>inspect.</em></h1><p class="lede">Recorded results, reproducible commands, and the boundaries of what this project demonstrates.</p></header>'
         + section(
             "01",
-            "Validation snapshot",
-            "A tested lifecycle.",
-            '<p>At the root-route hotfix validation on September 15, 2026: 537 tests passed, one optional telemetry test skipped, and measured coverage was 92.08%. These are a historical snapshot, not a live CI badge.</p><div class="actions"><a class="button" href="https://github.com/Muhmdk/AgentHub/actions/runs/35015729424">Inspect the successful workflow ↗</a><a class="button" href="https://github.com/Muhmdk/AgentHub/actions">Current CI ↗</a></div>',
+            "Current checks",
+            "Start with the latest run, not an old test count.",
+            '<p>Every proposed change runs tests, formatting, type checks, dependency and secret scans, policy tests, and a container smoke test. The agent-gateway benchmark runs against fake providers and an isolated database. Check the latest main run for the current result; a green past run does not prove a future change.</p><div class="actions"><a class="button primary" href="https://github.com/Muhmdk/AgentHub/actions/workflows/ci.yml?query=branch%3Amain">Latest main checks ↗</a><a class="button" href="https://github.com/Muhmdk/AgentHub/blob/main/.github/workflows/ci.yml">Read the CI workflow ↗</a></div><details><summary>Older recorded snapshot</summary><p>On September 15, 2026, a root-route hotfix run recorded 537 passed tests, one optional telemetry skip, and 92.08% coverage. This is historical, not today’s test count. <a href="https://github.com/Muhmdk/AgentHub/actions/runs/35015729424">Inspect that run</a>.</p></details>',
         )
         + section(
             "02",
-            "Local performance",
-            "Measure before making capacity claims.",
-            '<p>Recorded September 14, 2026 EDT: Apple M2 Pro, 16 GiB RAM, Python 3.14.3, one Uvicorn process, local PostgreSQL, deterministic providers, loopback traffic.</p><div class="table-wrap"><table><caption>Historical control-plane baseline</caption><thead><tr><th scope="col">Endpoint</th><th scope="col">Requests / concurrency</th><th scope="col">Failures</th><th scope="col">Throughput</th><th scope="col">p95</th></tr></thead><tbody><tr><td>/health/live</td><td>500 / 20</td><td>0</td><td>2,176.66 req/s</td><td>26.52 ms</td></tr><tr><td>/observability/fleet</td><td>100 / 8</td><td>0</td><td>285.46 req/s</td><td>105.99 ms</td></tr></tbody></table></div><p>These endpoints do not measure model inference throughput or production capacity. Network, cloud providers, and realistic user traffic require separate measurements.</p>'
+            "What was measured",
+            "Two different kinds of performance evidence.",
+            '<p>The historical workstation baseline below measures control-plane endpoints only. It was recorded September 14, 2026 EDT on an Apple M2 Pro, 16 GiB RAM, Python 3.14.3, one Uvicorn process, local PostgreSQL, deterministic providers, and loopback traffic.</p><div class="table-wrap"><table><caption>Historical control-plane baseline</caption><thead><tr><th scope="col">Endpoint</th><th scope="col">Requests / concurrency</th><th scope="col">Failures</th><th scope="col">Throughput</th><th scope="col">p95</th></tr></thead><tbody><tr><td>/health/live</td><td>500 / 20</td><td>0</td><td>2,176.66 req/s</td><td>26.52 ms</td></tr><tr><td>/observability/fleet</td><td>100 / 8</td><td>0</td><td>285.46 req/s</td><td>105.99 ms</td></tr></tbody></table></div><p><strong>Passing CI agent sample, October 24, 2026:</strong> six gateway calls across three agents, zero HTTP failures, six cited answers, six deterministic fixture matches, and 44.44 ms p95 latency. This used a shared x86_64 runner, fake model, local retrieval, and one request at a time. With only six requests, p95 is simply the slowest request—not a stable tail-latency estimate. <a href="https://github.com/Muhmdk/AgentHub/actions/runs/40044902379/job/120724482832">Inspect the exact job log</a>.</p><p>PR checks repeat this small functional load test and report latency, failures, citations, and token use. It is not a production capacity claim or a real-model benchmark.</p>'
             + f'<a class="text-link" href="{SOURCE}/blob/main/docs/performance-and-resilience.md">Methodology, commands & resilience report ↗</a>',
         )
         + section(
             "03",
-            "Verification layers",
-            "More than a successful response.",
-            cards(
+            "Proof by claim",
+            "Open the check behind each claim.",
+            proof_cards(
                 [
                     (
-                        "Contracts & integration",
-                        "HTTP responses, schema validation, database migrations, governance denies, concurrency boundaries, and immutable records.",
+                        "A bad update is blocked",
+                        "Versioned evaluations and required gates can stop a failed candidate.",
+                        "tests/e2e/test_demo_lifecycle.py",
+                        "Open the end-to-end test",
                     ),
                     (
-                        "End-to-end recovery",
-                        "Registration, evaluation, releases, canaries, evidence, rollback, recovery verification, and audit ordering.",
+                        "An unsafe tool is denied",
+                        "The gateway records a policy decision before any undeclared action runs.",
+                        "tests/integration/test_governance_gateway.py",
+                        "Open the governance tests",
                     ),
                     (
-                        "Supply chain & deployment",
-                        "Locked dependencies, secret and vulnerability scans, OPA policy tests, non-root containers, Helm and Terraform validation.",
+                        "Rollback needs recovery proof",
+                        "The isolated lifecycle verifies the route change and post-rollback observations separately.",
+                        "tests/e2e/test_incident_rollback.py",
+                        "Open the recovery test",
                     ),
                 ]
             )
-            + f'<p><a href="{SOURCE}/tree/main/tests">Browse tests</a> · <a href="{SOURCE}/tree/main/.github/workflows">Browse workflows</a> · <a href="{SOURCE}/blob/main/docs/security/threat-model.md">Threat model and residual risks</a></p>',
+            + f'<p><a href="{SOURCE}/tree/main/tests">Browse all tests</a> · <a href="{SOURCE}/tree/main/.github/workflows">Browse workflows</a> · <a href="{SOURCE}/blob/main/docs/security/threat-model.md">Threat model and residual risks</a></p>',
         )
-        + section("04", "Boundaries", "Local proof, explicit limits.", boundaries())
+        + section(
+            "04",
+            "A visible failure",
+            "Follow the exact retrieval regression.",
+            '<p>See the planted change, before-and-after latency, guardrail breach, saved evidence, and the difference between rollback and verified recovery.</p><a class="button" href="/failure-story">Read the failure story →</a>',
+        )
+        + section("05", "Boundaries", "Local proof, explicit limits.", boundaries())
     )
 
 
