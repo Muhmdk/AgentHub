@@ -94,7 +94,7 @@ def test_missing_citation_fails_quality_even_with_http_200(
         "http://example.com",
         "https://example.com",
         "http://localhost:8000/other",
-        "http://user:secret@localhost:8000",
+        "http://user@localhost:8000",
     ],
 )
 def test_agent_load_rejects_unsafe_targets(url: str) -> None:
