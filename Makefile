@@ -9,7 +9,7 @@ OPA ?= opa
 HELM_CHART := deploy/helm/agenthub
 HELM_CI_VALUES := tests/fixtures/helm/values-ci.yaml
 
-.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e docs-check clean-install security policy infra-terraform infra-helm infra-validate smoke-deployment measure-load up observability-up observability-down migrate seed-registry run demo demo-setup demo-reset demo-inventory demo-knowledge demo-shopping demo-incident-fault ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
+.PHONY: setup lock format lint typecheck test test-unit test-contract test-integration test-e2e docs-check clean-install security policy infra-terraform infra-helm infra-validate smoke-deployment measure-load measure-agents up observability-up observability-down migrate seed-registry run demo demo-setup demo-reset demo-inventory demo-knowledge demo-shopping demo-incident-fault ingest-corpus benchmark-rag evaluate evaluate-bad simulate-release simulate-release-bad down clean
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -93,6 +93,10 @@ smoke-deployment:
 measure-load:
 	test -n "$(BASE_URL)"
 	$(BIN)/python scripts/measure_load.py --base-url "$(BASE_URL)" $(LOAD_ARGS)
+
+measure-agents:
+	test -n "$(BASE_URL)"
+	$(BIN)/python scripts/measure_agents.py --base-url "$(BASE_URL)" $(AGENT_ARGS)
 
 up:
 	docker compose up --detach --wait postgres
