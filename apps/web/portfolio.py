@@ -549,7 +549,7 @@ def demo() -> str:
     <div class="demo-toolbar"><label for="demo-mode">Experience</label><select id="demo-mode"><option value="preview">Browser simulation</option><option value="live">Local API walkthrough</option></select><button id="demo-reset" type="button">Restart walkthrough</button></div>
     <p id="mode-notice" class="notice"></p><div class="demo-layout"><nav id="demo-steps" aria-label="Lifecycle stages"></nav><section class="demo-stage" aria-labelledby="stage-title"><p id="stage-count" class="eyebrow"></p><h2 id="stage-title"></h2><p id="stage-description" class="intro"></p><div id="stage-evidence"></div><p id="stage-status" role="status" aria-live="polite"></p><div class="actions"><button id="stage-action" class="primary" type="button">Inspect evidence</button><a id="stage-console" class="button" href="/console">Open console ↗</a></div><details><summary>Inspect response or illustrative record</summary><pre id="stage-raw"></pre></details><div class="demo-controls"><button id="demo-prev" type="button">← Previous</button><button id="demo-next" type="button">Next stage →</button></div></section></div>
     <section class="chapter"><p class="eyebrow">Walkthrough history</p><ol id="demo-events" class="events" aria-live="polite"></ol></section>
-    <script src="/assets/demo.js" defer></script>"""
+    <script src="/assets/demo-decisions.js" defer></script><script src="/assets/demo.js" defer></script>"""
 
 
 PAGES = {
