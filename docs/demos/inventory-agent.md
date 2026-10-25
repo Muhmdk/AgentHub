@@ -75,8 +75,8 @@ error codes.
 ## Limitations
 
 - City and product recognition is deterministic matching over fixture names and aliases.
-- Only Toronto, Vancouver, Snow Shovel, and Ice Melt exist in the Phase 01 fixtures.
+- Only Toronto, Vancouver, Snow Shovel, and Ice Melt exist in these fixtures.
 - The fake model demonstrates the runtime contract, replay, and evidence flow; it does not
   demonstrate hosted-model answer quality.
-- Inventory and evidence are read-only in Phase 01. Registration and persistence begin in later
-  phases.
+- Inventory and evidence are read-only in this demonstration. Registration and persistence are
+  available through the AgentHub registry.

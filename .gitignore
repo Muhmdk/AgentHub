@@ -44,3 +44,12 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Private local build notes and agent instructions
+/AGENTHUB_PLAN.md
+/CONTRIBUTING.md
+/.github/pull_request_template.md
+/AGENTS.md
+/.agents/
+/.codex/
+/.planning/

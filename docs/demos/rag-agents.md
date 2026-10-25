@@ -1,6 +1,6 @@
 # RAG agent demonstrations
 
-Phase 02 adds a seven-document fictional retail corpus, deterministic local retrieval, and two
+AgentHub includes a seven-document fictional retail corpus, deterministic local retrieval, and two
 grounded agents. Every default path is offline and uses the fake model.
 
 ## Validate ingestion
@@ -79,7 +79,7 @@ make benchmark-rag
 ```
 
 The committed `retrieval-v1` suite contains six known-answer queries covering all three policies
-and three product needs. The Phase 02 baseline is 6/6 top-three hits, or a `1.0` hit rate. The
+and three product needs. The committed baseline is 6/6 top-three hits, or a `1.0` hit rate. The
 command prints a machine-readable JSON report with every expected and retrieved document ID.
 
 ## Provenance and safety

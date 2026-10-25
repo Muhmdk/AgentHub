@@ -50,8 +50,8 @@ Benefits:
 
 Tradeoffs:
 
-- local Phase 03 development now requires Docker and PostgreSQL;
+- local registry development requires Docker and PostgreSQL;
 - synchronous database work is moved to worker threads at the async API boundary;
 - the console is a focused inventory view rather than a complete administration interface;
-- authentication and authorization are intentionally deferred to the governance phase, so the
-  actor field is auditable input rather than a verified identity claim.
+- the local actor field is auditable input rather than a verified identity claim; production
+  requests require authentication and authorization at the control-plane boundary.

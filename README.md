@@ -236,5 +236,4 @@ tests/                     Unit, contract, integration, end-to-end, and fixtures
 docs/                      Architecture, ADRs, guides, runbooks, demos, evidence
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before changing dependencies, contracts, or generated
-artifacts. AgentHub is available under the [MIT License](LICENSE).
+AgentHub is available under the [MIT License](LICENSE).

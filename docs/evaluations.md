@@ -1,6 +1,6 @@
 # Evaluations and release gates
 
-Phase 04 evaluates an immutable registered agent version with committed inputs, persists the full
+AgentHub evaluates an immutable registered agent version with committed inputs, persists the full
 result, and produces an explainable gate decision. The local path is deterministic and does not
 require model credentials.
 
@@ -108,7 +108,7 @@ Change thresholds only by adding a new gate-profile version and updating a suite
 edit a file already used for a release. A zero baseline uses explicit zero handling for relative
 regression; a positive regression from zero fails.
 
-The baseline UUID is supplied explicitly in Phase 04. Later release automation will resolve the
-current production baseline. Local timing measures scheduling and in-process work, so tune latency
+The baseline UUID can be supplied explicitly; release automation resolves the current production
+baseline. Local timing measures scheduling and in-process work, so tune latency
 only from representative environments. PII and harmful-content regexes are intentionally narrow,
 auditable safety tripwires rather than comprehensive content classifiers.

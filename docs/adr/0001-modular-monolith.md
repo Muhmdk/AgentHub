@@ -27,8 +27,7 @@ or release-isolation requirement demonstrates the need. Any extraction requires 
 defines ownership, failure behavior, data consistency, observability, and local-development
 impact.
 
-Phase 00 therefore ships one FastAPI process and no database. PostgreSQL is introduced when
-the registry has real persistence behavior in Phase 03.
+The first service used one FastAPI process; PostgreSQL was added with the persistent registry.
 
 ## Consequences
 

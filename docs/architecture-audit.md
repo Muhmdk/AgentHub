@@ -1,6 +1,6 @@
 # Architecture and dependency audit
 
-This audit covers the Phase 10 system at merge commit `c1b0f30`. It evaluates runtime ownership,
+This audit covers the system at merge commit `c1b0f30`. It evaluates runtime ownership,
 dependency direction, configuration flags, assets, infrastructure, and executable entry points.
 
 ## Dependency direction
