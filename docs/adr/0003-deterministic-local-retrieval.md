@@ -7,10 +7,9 @@
 ## Context
 
 The Knowledge and Shopping Agents need measurable retrieval, stable citations, metadata
-filtering, and repeatable ingestion. Phase 02 has only seven small synthetic documents and no
-persistence requirement. Introducing PostgreSQL with pgvector or a hosted search service now
-would add infrastructure and provider credentials before the registry phase establishes a real
-database lifecycle.
+filtering, and repeatable ingestion. The local corpus has only seven small synthetic documents
+and no persistence requirement. Using a hosted search service for this demo would add
+infrastructure and provider credentials without improving its reproducibility.
 
 Default tests must also run offline without paid embedding calls. A production search adapter
 will eventually need to preserve the same evidence and version contracts, so agent code should
@@ -18,7 +17,7 @@ not depend on an embedding vendor or storage engine.
 
 ## Decision
 
-Phase 02 uses an `InMemoryRetriever` behind a provider-neutral `Retriever` protocol. It applies
+The local demo uses an `InMemoryRetriever` behind a provider-neutral `Retriever` protocol. It applies
 deterministic paragraph-and-word chunking, SHA-256 content hashes, and stable chunk identifiers.
 Corpus identity is the pair of corpus ID and version. Re-ingesting an identical version reports
 unchanged chunks; trying to change the contents of that version is rejected.

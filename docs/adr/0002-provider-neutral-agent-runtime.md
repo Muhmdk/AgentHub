@@ -19,14 +19,14 @@ step boundaries.
 ## Decision
 
 Agent code depends on the small `ChatModel` protocol and normalized request, response, usage,
-tool, citation, and error contracts. Provider selection is explicit. Phase 01 permits only the
-`fake` provider; an unsupported value fails configuration instead of silently falling back to a
+tool, citation, and error contracts. Provider selection is explicit. Local runs use the `fake`
+provider; an unsupported value fails configuration instead of silently falling back to a
 network adapter.
 
 The deterministic fake model hashes the complete seeded request to produce a replay identity
 and returns the evidence-derived answer prepared by the graph. It does not make network calls.
-Future provider adapters may generate the final answer, but they must preserve the same bounded
-contract and will remain opt-in until their owning phase.
+Live provider adapters may generate the final answer, but they must preserve the same bounded
+contract and remain opt-in.
 
 The Inventory Agent uses a three-node LangGraph sequence:
 
@@ -54,4 +54,3 @@ Tradeoffs:
 - the fixed graph supports only the bounded inventory question family;
 - adding a live provider requires a deliberate adapter and opt-in contract tests;
 - richer planning is deferred until a real workload demonstrates the need.
-

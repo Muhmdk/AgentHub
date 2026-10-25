@@ -30,12 +30,12 @@ and operators to deployment/rollback controls.
 
 ## High-risk findings closed
 
-1. **Unauthenticated production control plane:** before Phase 11, gateway invocation was authenticated
+1. **Unauthenticated production control plane:** gateway invocation was authenticated
    but registry, delivery, evidence, and rollback routes relied on network placement. All non-public
    staging and production paths now require configured bearer identity.
 2. **Rollback actor spoofing:** rollback audit actors could differ from the authenticated caller.
    Staging/production rollback now requires an exact actor/subject match.
-3. **Client-asserted rollback eligibility:** already closed in Phase 10. The rollback endpoint rejects
+3. **Client-asserted rollback eligibility:** the rollback endpoint rejects
    extra policy facts and derives them from persisted evidence and delivery state.
 
 ## Accepted residual risks

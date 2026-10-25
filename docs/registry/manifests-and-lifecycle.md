@@ -1,6 +1,6 @@
 # Agent manifests and lifecycle
 
-Phase 03 introduces the persistent AgentHub registry. An agent is a stable logical name; each
+The persistent AgentHub registry gives each agent a stable logical name; each
 semantic version is an immutable executable specification described by an Agent Manifest.
 
 ## Start the registry locally
@@ -39,7 +39,7 @@ sorted compact JSON, so harmless key ordering does not change identity.
 
 The three committed example manifests describe Inventory, Knowledge, and Shopping Agent version
 `1.0.0` at the green `v0.1.0` source commit. Their image digests demonstrate the immutable
-contract; they do not claim that images were published by Phase 03.
+contract; they do not claim that images were published.
 
 ## Register and inspect a version
 
@@ -98,6 +98,5 @@ Manifest reuse, illegal transitions, and stale revisions return `registry_confli
 `409`. Validation errors remain HTTP `422`. Submitted manifests and database details are not
 included in error messages.
 
-The actor value is not an authenticated identity in Phase 03. Authentication, authorization,
-and policy-bound actor claims arrive in later governance work; callers must not treat this local
-demo field as proof of identity.
+The actor value in this local example is not proof of an authenticated identity. Production
+requests use the gateway and control-plane authentication boundary.
